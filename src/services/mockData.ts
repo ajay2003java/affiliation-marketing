@@ -93,6 +93,13 @@ export const MOCK_CATEGORIES: ServiceCategory[] = [
     iconName: 'GraduationCap',
     description: 'Leadership workshops, technical certifications, and sales training',
     activeOfferingsCount: 1
+  },
+  {
+    id: 'cat_food',
+    name: 'Food & Dining Services',
+    iconName: 'Utensils',
+    description: 'Multi-cuisine dining, party catering, bulk orders, and restaurant meals',
+    activeOfferingsCount: 4
   }
 ];
 
