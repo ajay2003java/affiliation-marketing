@@ -220,12 +220,12 @@ Satyam Family Biryani Feast (Serves 4-5) 1499`
       };
       reader.readAsDataURL(file);
 
-      // Perform real storage upload to Supabase bucket 'provider-rate-cards'
+      // Perform real storage upload
       const uploadRes = await uploadRateCardImage(file, activeProvider.id);
       if (uploadRes.success && uploadRes.filePath) {
         setRateCardStoragePath(uploadRes.filePath);
         setRateCardStorageUrl(uploadRes.fileUrl || uploadRes.filePath);
-        showNotification(`Menu photo uploaded to Supabase ("provider-rate-cards/${uploadRes.filePath}")!`, 'success');
+        showNotification('Menu photo uploaded successfully!', 'success');
       }
 
       performOcrScan(file);
@@ -321,11 +321,11 @@ Satyam Family Biryani Feast (Serves 4-5) 1499`
         rewardRules: rules
       });
 
-      // Synchronize directly with Supabase DB
+      // Synchronize to backend
       syncOfferingToSupabase(created);
     });
 
-    showNotification(`Published ${selected.length} services with strict 50% affiliate referral split! Synced to Supabase DB.`, 'success');
+    showNotification(`Published ${selected.length} services successfully!`, 'success');
     onClose();
   };
 
@@ -377,10 +377,10 @@ Satyam Family Biryani Feast (Serves 4-5) 1499`
       rewardRules: rules
     });
 
-    // Synchronize directly with Supabase DB
+    // Synchronize to backend
     syncOfferingToSupabase(created);
 
-    showNotification(`Added service "${manualTitle}"! Service Price: ₹${manualPrice}, Affiliate Reward: ₹${affConv || affLead} (Synced to Supabase DB).`, 'success');
+    showNotification(`Added service "${manualTitle}" successfully!`, 'success');
     onClose();
   };
 
@@ -543,11 +543,6 @@ Satyam Family Biryani Feast (Serves 4-5) 1499`
                         <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)', display: 'block' }}>
                           {isScanning ? `🔍 ${scanStatusMessage}` : `✓ ${extractedItems.length} services detected`}
                         </span>
-                        {rateCardStoragePath && (
-                          <span style={{ fontSize: '0.72rem', color: 'var(--finance-green)', fontWeight: 600, display: 'block', marginTop: '2px' }}>
-                            ✓ Stored in Supabase Bucket: <code>provider-rate-cards/{rateCardStoragePath}</code>
-                          </span>
-                        )}
                       </div>
                     </div>
 

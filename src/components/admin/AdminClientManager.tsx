@@ -210,7 +210,7 @@ export const AdminClientManager: React.FC = () => {
       : 'Dhanvika Diagnostics & Healthcare Labs';
     const emailPrefix = cleanBizName.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-    setScanStepText(`Uploading to Supabase bucket "mou-documents": "${file.name}"...`);
+    setScanStepText(`Uploading document "${file.name}"...`);
 
     // Perform real storage upload to Supabase bucket
     const uploadRes = await uploadMouDocument(file, cleanBizName);
@@ -240,9 +240,7 @@ export const AdminClientManager: React.FC = () => {
           setIsScanningMou(false);
           setExtractedSuccess(true);
           showNotification(
-            uploadRes.success
-              ? `MoU successfully uploaded to Supabase storage ("mou-documents/${uploadRes.filePath}") & partner data parsed!`
-              : `Document parsed: extracted 40% MRP commission terms and credentials from "${file.name}"!`,
+            `MoU document uploaded successfully & partner details parsed!`,
             'success'
           );
         }, 350);
@@ -342,7 +340,7 @@ export const AdminClientManager: React.FC = () => {
       mouCommissionPercent: pct
     });
 
-    showNotification(`New client "${newProv.businessName}" onboarded! Credentials generated and synchronized to Supabase.`, 'success');
+    showNotification(`New client "${newProv.businessName}" onboarded successfully! Credentials generated.`, 'success');
     setShowAddClientModal(false);
 
     // Reset fields
@@ -790,12 +788,6 @@ export const AdminClientManager: React.FC = () => {
                             ✓ Signed MoU extracted: Company, signatory, login email credentials & rates loaded below!
                           </span>
                         </div>
-                        {mouStoragePath && (
-                          <div style={{ fontSize: '0.74rem', color: '#15803D', paddingLeft: '28px', wordBreak: 'break-all' }}>
-                            <span style={{ fontWeight: 700 }}>Stored in Supabase Bucket: </span>
-                            <code>mou-documents/{mouStoragePath}</code>
-                          </div>
-                        )}
                       </div>
                     )}
 
