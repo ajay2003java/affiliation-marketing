@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+    container_name: affiliation_marketing_frontend
+    ports:
+      # Defaults to 3000:80, or you can override PORT in your .env on the server (e.g. PORT=5100)
+      - "${PORT:-3000}:80"
+    env_file:
+      - .env
+    restart: always
