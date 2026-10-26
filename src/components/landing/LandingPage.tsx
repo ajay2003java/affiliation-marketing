@@ -482,17 +482,17 @@ export const LandingPage: React.FC = () => {
       {/* ========================================================================= */}
       {landingMode === 'affiliate' ? (
         /* AFFILIATE STEPS */
-        <section id="how-it-works" style={{ maxWidth: '1240px', margin: '0 auto', padding: '72px 20px' }}>
+        <section id="how-it-works" className="landing-section">
           <div style={{ textAlign: 'center', maxWidth: '640px', margin: '0 auto 48px' }}>
-            <h2 style={{ fontSize: '1.9rem', fontWeight: 800, color: '#0A2540', letterSpacing: '-0.02em' }}>
+            <h2 className="section-title">
               How the platform works in 3 clear steps
             </h2>
-            <p style={{ color: '#64748B', marginTop: '8px', fontSize: '0.95rem' }}>
+            <p className="section-subtitle">
               Built for clean attribution, complete privacy, and zero disputes.
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
+          <div className="landing-grid-cards">
             {/* Step 1 */}
             <div className="b2b-card" style={{ padding: '28px' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#0A2540', color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, marginBottom: '18px' }}>
@@ -545,7 +545,7 @@ export const LandingPage: React.FC = () => {
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
+          <div className="landing-grid-cards">
             {/* Step 1 */}
             <div className="b2b-card" style={{ padding: '28px' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#0A2540', color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, marginBottom: '18px' }}>
@@ -593,21 +593,21 @@ export const LandingPage: React.FC = () => {
       {/* ========================================================================= */}
       {landingMode === 'affiliate' ? (
         /* AFFILIATE TRUST */
-        <section id="trust" style={{ backgroundColor: '#F8FAFC', borderTop: '1px solid #E2E8F0', borderBottom: '1px solid #E2E8F0', padding: '72px 20px' }}>
+        <section id="trust" className="landing-section" style={{ backgroundColor: '#F8FAFC', borderTop: '1px solid #E2E8F0', borderBottom: '1px solid #E2E8F0' }}>
           <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
             <div style={{ textAlign: 'center', maxWidth: '640px', margin: '0 auto 48px' }}>
               <span className="b2b-badge" style={{ marginBottom: '10px' }}>
                 Enterprise Compliance
               </span>
-              <h2 style={{ fontSize: '1.9rem', fontWeight: 800, color: '#0A2540', letterSpacing: '-0.02em' }}>
+              <h2 className="section-title">
                 Institutional security and statutory compliance
               </h2>
-              <p style={{ color: '#64748B', marginTop: '8px', fontSize: '0.95rem' }}>
+              <p className="section-subtitle" style={{ marginTop: '8px' }}>
                 Built for commercial partnerships that require legal enforceability, audit trails, and tax compliance.
               </p>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' }}>
+            <div className="landing-grid-cards">
               {/* Trust Pillar 1 */}
               <div className="b2b-card" style={{ padding: '28px' }}>
                 <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#E6F7F0', color: '#0E8A5E', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
@@ -651,21 +651,21 @@ export const LandingPage: React.FC = () => {
         </section>
       ) : (
         /* PROVIDER - WHY WORK WITH US (Ultra-Clear) */
-        <section id="provider-benefits" style={{ backgroundColor: '#F8FAFC', borderTop: '1px solid #E2E8F0', borderBottom: '1px solid #E2E8F0', padding: '72px 20px' }}>
+        <section id="provider-benefits" className="landing-section" style={{ backgroundColor: '#F8FAFC', borderTop: '1px solid #E2E8F0', borderBottom: '1px solid #E2E8F0' }}>
           <div style={{ maxWidth: '1240px', margin: '0 auto' }}>
             <div style={{ textAlign: 'center', maxWidth: '640px', margin: '0 auto 48px' }}>
               <span className="b2b-badge" style={{ marginBottom: '10px' }}>
                 Zero Risk Growth
               </span>
-              <h2 style={{ fontSize: '1.9rem', fontWeight: 800, color: '#0A2540', letterSpacing: '-0.02em' }}>
+              <h2 className="section-title">
                 The Risk-Free Way To Increase Revenue
               </h2>
-              <p style={{ color: '#64748B', marginTop: '8px', fontSize: '0.95rem' }}>
+              <p className="section-subtitle" style={{ marginTop: '8px' }}>
                 Grow your sales without risking your hard-earned money on marketing agencies or ads.
               </p>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' }}>
+            <div className="landing-grid-cards">
               {/* Benefit 1 */}
               <div className="b2b-card" style={{ padding: '28px' }}>
                 <div style={{ width: '40px', height: '40px', borderRadius: '8px', backgroundColor: '#E6F7F0', color: '#0E8A5E', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
@@ -714,19 +714,19 @@ export const LandingPage: React.FC = () => {
       {/* ========================================================================= */}
       {landingMode === 'affiliate' ? (
         /* AFFILIATE CATALOG */
-        <section id="marketplace" style={{ maxWidth: '1240px', margin: '0 auto', padding: '72px 20px' }}>
+        <section id="marketplace" className="landing-section">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '20px', marginBottom: '36px' }}>
             <div>
-              <h2 style={{ fontSize: '1.9rem', fontWeight: 800, color: '#0A2540', letterSpacing: '-0.02em' }}>
+              <h2 className="section-title">
                 Featured Service Catalog
               </h2>
-              <p style={{ color: '#64748B', marginTop: '6px', fontSize: '0.94rem' }}>
+              <p className="section-subtitle" style={{ marginTop: '6px' }}>
                 Verified offerings currently accepting affiliate customer referrals.
               </p>
             </div>
 
             {/* Category Filter Pills */}
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <div className="category-filter-strip">
               {[
                 { id: 'all', label: 'All Services' },
                 { id: 'cat_health', label: 'Healthcare & Diagnostics' },
@@ -757,7 +757,7 @@ export const LandingPage: React.FC = () => {
           </div>
 
           {/* Offerings Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+          <div className="landing-grid-cards">
             {filteredOfferings.map((offering) => {
               const provider = providers.find((p) => p.id === offering.providerId);
               const leadRule = offering.rewardRules.find((r) => r.eventType === 'qualified_lead');
@@ -813,17 +813,17 @@ export const LandingPage: React.FC = () => {
         </section>
       ) : (
         /* PROVIDER - WHO CAN JOIN (Clear & Visual) */
-        <section id="provider-who" style={{ maxWidth: '1240px', margin: '0 auto', padding: '72px 20px' }}>
+        <section id="provider-who" className="landing-section">
           <div style={{ textAlign: 'center', maxWidth: '640px', margin: '0 auto 48px' }}>
-            <h2 style={{ fontSize: '1.9rem', fontWeight: 800, color: '#0A2540', letterSpacing: '-0.02em' }}>
+            <h2 className="section-title">
               Who Can Partner With Us?
             </h2>
-            <p style={{ color: '#64748B', marginTop: '6px', fontSize: '0.95rem' }}>
+            <p className="section-subtitle" style={{ marginTop: '6px' }}>
               If you offer quality services in your city, we have customers for you.
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' }}>
+          <div className="landing-grid-cards">
             <div className="b2b-card" style={{ padding: '28px', borderTop: '4px solid #0052CC' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
                 <span style={{ fontSize: '1.6rem' }}>🩺</span>
@@ -880,7 +880,7 @@ export const LandingPage: React.FC = () => {
           </div>
 
           {/* Simple CTA Callout */}
-          <div style={{ marginTop: '48px', backgroundColor: '#061325', borderRadius: '14px', padding: '34px 32px', color: '#FFFFFF', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '20px' }}>
+          <div className="cta-callout-card">
             <div>
               <h3 style={{ fontSize: '1.35rem', fontWeight: 800, marginBottom: '6px' }}>
                 Ready to increase your business revenue this month?
@@ -919,7 +919,7 @@ export const LandingPage: React.FC = () => {
       {/* ========================================================================= */}
       {/* 6. HONEST, CLEAN FAQ */}
       {/* ========================================================================= */}
-      <section id={landingMode === 'affiliate' ? 'faq' : 'provider-faq'} style={{ maxWidth: '820px', margin: '0 auto', padding: '40px 20px 80px' }}>
+      <section id={landingMode === 'affiliate' ? 'faq' : 'provider-faq'} className="landing-section" style={{ maxWidth: '820px', margin: '0 auto', paddingBottom: '80px' }}>
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
           <h2 style={{ fontSize: '1.9rem', fontWeight: 800, color: '#0A2540', letterSpacing: '-0.02em' }}>
             Frequently Asked Questions
