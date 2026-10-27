@@ -30,9 +30,6 @@ export const Header: React.FC = () => {
             </div>
             <div className="brand-titles">
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <h1 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--brand-navy)' }}>
-                  sBLOOM
-                </h1>
                 <span
                   style={{
                     fontSize: '0.65rem',

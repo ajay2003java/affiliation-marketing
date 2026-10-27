@@ -242,15 +242,12 @@ export const LandingPage: React.FC = () => {
             <div className="nav-logo-box">
               <img
                 src="/sbloom-logo.jpg"
-                alt="sBLOOM by Ottobon"
+                alt="sBLOOM"
                 className="nav-logo-img"
               />
             </div>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span className="nav-brand-title">
-                  sBLOOM
-                </span>
                 <span className="nav-brand-badge">
                   by Ottobon
                 </span>
