@@ -1324,18 +1324,19 @@ body {
     flex-shrink: 0 !important;
   }
 
-  /* 2. Full Viewport Hero Card (Full initial mobile screen, elegant card depth, zero half-half) */
+  /* 2. Unified Hero Banner (Straight flat border across all devices: Mac, iPhone, Android) */
   .b2b-hero-banner {
-    min-height: calc(100svh - 50px) !important;
-    min-height: calc(100dvh - 50px) !important;
+    min-height: auto !important;
     display: flex !important;
     flex-direction: column !important;
-    justify-content: center !important;
+    justify-content: flex-start !important;
     align-items: center !important;
-    padding: 24px 14px 28px !important;
-    border-bottom-left-radius: 24px !important;
-    border-bottom-right-radius: 24px !important;
-    box-shadow: 0 16px 36px rgba(6, 19, 37, 0.22) !important;
+    padding: 44px 16px 48px !important;
+    border-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    border-bottom-right-radius: 0 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    box-shadow: none !important;
     box-sizing: border-box !important;
     position: relative !important;
     width: 100% !important;
@@ -1405,14 +1406,14 @@ body {
     flex-direction: row !important;
     align-items: center !important;
     justify-content: space-between !important;
-    max-width: 330px !important;
+    max-width: 350px !important;
     width: 100% !important;
-    margin: 18px auto 0 !important;
+    margin: 20px auto 0 !important;
     padding: 10px 10px !important;
-    border-radius: 12px !important;
+    border-radius: 9999px !important;
     gap: 4px !important;
-    background: rgba(255, 255, 255, 0.07) !important;
-    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
     box-sizing: border-box !important;
   }
 
@@ -1458,22 +1459,7 @@ body {
   }
 
   .hero-scroll-cue {
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    gap: 6px !important;
-    margin-top: 16px !important;
-    color: rgba(255, 255, 255, 0.65) !important;
-    font-size: 0.74rem !important;
-    font-weight: 500 !important;
-    text-decoration: none !important;
-    transition: color 0.15s ease !important;
-  }
-  .hero-scroll-cue:hover {
-    color: #FFFFFF !important;
-  }
-  .cue-bounce-icon {
-    animation: cueBounce 2s infinite ease-in-out !important;
+    display: none !important;
   }
 
   /* 4. Section Spacing & Layout on Mobile */

@@ -461,14 +461,6 @@ export const LandingPage: React.FC = () => {
                   <span className="hero-trust-lbl">Pay Only When Paid</span>
                 </div>
               </div>
-
-              {/* Gentle Mobile Scroll Anchor */}
-              <div>
-                <a href="#provider-how" className="hero-scroll-cue" aria-label="Scroll to see how it works">
-                  <span>See 3 simple steps</span>
-                  <ChevronDown size={14} className="cue-bounce-icon" />
-                </a>
-              </div>
             </div>
           </div>
         )}
