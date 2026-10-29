@@ -40,6 +40,25 @@ export const AddServicesModal: React.FC<AddServicesModalProps> = ({ onClose }) =
 
   const activeProvider: Provider = providers.find((p) => p.id === activeProviderId) || providers[0];
 
+  // Determine provider business category based on name & description
+  const isHealthcare = /diag|health|clinic|medic|fetal|care|hospital|pathol|scan|doctor/i.test(
+    `${activeProvider.businessName} ${activeProvider.description}`
+  );
+  const isIT = /cloud|it|tech|soft|system|cyber|dev|infra/i.test(
+    `${activeProvider.businessName} ${activeProvider.description}`
+  );
+  const isFood = /restaurant|food|biryani|dining|cafe|kitchen|cater/i.test(
+    `${activeProvider.businessName} ${activeProvider.description}`
+  );
+
+  const defaultCategory = isHealthcare
+    ? (categories.find((c) => c.id === 'cat_health')?.id || 'cat_health')
+    : isIT
+    ? (categories.find((c) => c.id === 'cat_it')?.id || 'cat_it')
+    : isFood
+    ? (categories.find((c) => c.id === 'cat_food')?.id || 'cat_food')
+    : (categories.find((c) => c.id === 'cat_corp')?.id || categories[0]?.id || 'cat_health');
+
   // Active Tab: 'photo' (Snap/Upload Rate Card) vs 'paste' (Quick Text Menu) vs 'manual' (Enter One by One)
   const [activeTab, setActiveTab] = useState<'photo' | 'paste' | 'manual'>('photo');
 
@@ -51,102 +70,108 @@ export const AddServicesModal: React.FC<AddServicesModalProps> = ({ onClose }) =
   const [scanStatusMessage, setScanStatusMessage] = useState('Scanning price list with OCR...');
   const [extractedItems, setExtractedItems] = useState<ExtractedItem[]>([]);
 
-  // Quick Text Paste Mode State
-  const [pasteMenuText, setPasteMenuText] = useState(
-`Hyd. Chicken Dum Biryani 286
-Special Chicken Fry Biryani 286
-Chicken Biryani Boneless 319
-Chicken Double Joint Biryani 370
-Mutton Fry Biryani 440
-Natukodi Biryani 440
-Prawns Fry Biryani 362
-Special Chicken Fried Rice 299
-Veg. Fried Rice 238
-Mutton Fry 399
-Vanjaram Fish Fry 338
-Satyam Family Biryani Feast (Serves 4-5) 1499`
-  );
+  // Industry-specific sample generator
+  const getProviderSampleText = () => {
+    if (isHealthcare) {
+      return `Comprehensive Master Health Checkup (85+ Tests) 3999
+Executive Cardiac & Diabetes Diagnostic Suite 6499
+Complete Blood Picture (CBP) with ESR 350
+Lipid Profile Panel (Cholesterol, HDL, LDL, Triglycerides) 650
+Diabetes Screening Package (HbA1c + Fasting Blood Sugar) 850
+Thyroid Function Test (Total T3, T4, TSH) 550
+Liver Function Test (LFT - 11 Parameters) 750
+Renal / Kidney Function Test (KFT / RFT) 750
+Vitamin D3 & Vitamin B12 Screening 1499
+Senior Citizen Preventive Wellness Screening 4499`;
+    }
+    if (isIT) {
+      return `Cloud Architecture & Security Audit 25000
+AWS / Azure Infrastructure Cost Optimization 15000
+DevOps CI/CD Automation & Docker Migration 35000
+Enterprise Vulnerability & Penetration Testing 45000`;
+    }
+    if (isFood) {
+      return `Family Feast Dinner Combo (Serves 4-5) 1499
+Corporate & Party Bulk Catering (10-15 Pax) 3999
+Weekend Special Chef Tasting Menu 850`;
+    }
+    return `Annual Corporate Employee Health Camp 35000
+Retained Executive Search & Recruitment 75000
+Corporate Compliance & Legal Audit 25000`;
+  };
+
+  // Quick Text Paste Mode State (Starts clean and empty so no foreign items are shown)
+  const [pasteMenuText, setPasteMenuText] = useState('');
 
   // Manual Mode State (Provider decides price and affiliate reward)
   const [manualTitle, setManualTitle] = useState('');
-  const [manualCategory, setManualCategory] = useState(categories.find((c) => c.id === 'cat_food')?.id || categories[0]?.id || 'cat_food');
+  const [manualCategory, setManualCategory] = useState(defaultCategory);
   const [manualDesc, setManualDesc] = useState('');
-  const [manualPrice, setManualPrice] = useState('286');
+  const [manualPrice, setManualPrice] = useState(isHealthcare ? '1999' : isIT ? '15000' : '1500');
   const [manualArea, setManualArea] = useState(activeProvider.city || 'Hyderabad');
   const [manualEnableLead, setManualEnableLead] = useState(true);
-  const [manualAffiliateLeadReward, setManualAffiliateLeadReward] = useState('30');
+  const [manualAffiliateLeadReward, setManualAffiliateLeadReward] = useState(isHealthcare ? '200' : isIT ? '1000' : '150');
   const [manualEnableConv, setManualEnableConv] = useState(true);
-  const [manualAffiliateConvReward, setManualAffiliateConvReward] = useState('60');
+  const [manualAffiliateConvReward, setManualAffiliateConvReward] = useState(isHealthcare ? '450' : isIT ? '2500' : '350');
 
-  // Demo samples for quick testing
-  const sampleRateCards = [
-    {
-      name: 'Satyam Restaurant Menu (Biryani & Andhra Specials)',
-      image: 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?auto=format&fit=crop&w=600&q=80',
-      items: [
-        { id: 'sat_1', selected: true, title: 'Hyd. Chicken Dum Biryani', category: 'cat_food', price: 286, affiliateLeadReward: 30, affiliateConvReward: 60, description: 'Authentic Hyderabadi dum biryani cooked with fragrant basmati rice and tender spiced chicken.' },
-        { id: 'sat_2', selected: true, title: 'Special Chicken Fry Biryani', category: 'cat_food', price: 286, affiliateLeadReward: 30, affiliateConvReward: 60, description: 'Crispy seasoned chicken fry served with rich spiced biryani rice.' },
-        { id: 'sat_3', selected: true, title: 'Chicken Biryani Boneless', category: 'cat_food', price: 319, affiliateLeadReward: 35, affiliateConvReward: 70, description: 'Succulent boneless chicken pieces layered in fragrant aromatic biryani rice.' },
-        { id: 'sat_4', selected: true, title: 'Mutton Fry Biryani', category: 'cat_food', price: 440, affiliateLeadReward: 50, affiliateConvReward: 100, description: 'Tender marinated mutton fry tossed with authentic spicy Andhra biryani rice.' },
-        { id: 'sat_5', selected: true, title: 'Natukodi Biryani (Country Chicken)', category: 'cat_food', price: 440, affiliateLeadReward: 50, affiliateConvReward: 100, description: 'Traditional Andhra country chicken (natukodi) prepared with home-style roasted spices.' },
-        { id: 'sat_6', selected: true, title: 'Prawns Fry Biryani', category: 'cat_food', price: 362, affiliateLeadReward: 40, affiliateConvReward: 80, description: 'Spiced juicy prawns stir-fried in coastal masala with fragrant biryani rice.' },
-        { id: 'sat_7', selected: true, title: 'Spl. Chicken Fried Rice', category: 'cat_food', price: 299, affiliateLeadReward: 30, affiliateConvReward: 60, description: 'Wok-tossed Chinese fried rice with chicken bits, eggs, and rich savory sauces.' },
-        { id: 'sat_8', selected: true, title: 'Mutton Fry (Andhra Special)', category: 'cat_food', price: 399, affiliateLeadReward: 40, affiliateConvReward: 80, description: 'Slow-roasted spicy Andhra mutton starter seasoned with curry leaves and black pepper.' },
-        { id: 'sat_9', selected: true, title: 'Vanjaram Fish Fry (Seer Fish)', category: 'cat_food', price: 338, affiliateLeadReward: 35, affiliateConvReward: 70, description: 'Fresh seer fish steak marinated in red chili, turmeric, and pan-seared to perfection.' },
-        { id: 'sat_10', selected: true, title: 'Satyam Biryani Family Feast (Serves 4-5)', category: 'cat_food', price: 1499, affiliateLeadReward: 150, affiliateConvReward: 350, description: 'Family handi biryani with starters, chicken fry, boiled eggs, and beverages.' },
-        { id: 'sat_11', selected: true, title: 'Corporate / Party Bulk Catering (10-15 Pax)', category: 'cat_food', price: 3999, affiliateLeadReward: 350, affiliateConvReward: 800, description: 'Full catering setup with multiple biryani options, Andhra non-veg gravies, and starters.' }
+  // Dynamic sample rate cards filtered by provider industry
+  const sampleRateCards = isHealthcare
+    ? [
+        {
+          name: 'Diagnostic Clinical Rate Card (8 Essential Panels)',
+          image: 'https://images.unsplash.com/photo-1579154204601-01588f351e67?auto=format&fit=crop&w=600&q=80',
+          items: [
+            { id: 'hc_1', selected: true, title: 'Comprehensive Master Health Checkup (85+ Tests)', category: 'cat_health', price: 3999, affiliateLeadReward: 350, affiliateConvReward: 900, description: '85+ blood and clinical diagnostic parameters with physician consultation.' },
+            { id: 'hc_2', selected: true, title: 'Executive Cardiac & Diabetes Diagnostic Suite', category: 'cat_health', price: 6499, affiliateLeadReward: 500, affiliateConvReward: 1400, description: 'ECG, 2D Echo, Lipid Profile, HbA1c, and cardiologist tele-review.' },
+            { id: 'hc_3', selected: true, title: 'Diabetes Management Screening Suite', category: 'cat_health', price: 1899, affiliateLeadReward: 200, affiliateConvReward: 450, description: 'HbA1c, fasting glucose, microalbuminuria, and kidney function tests.' },
+            { id: 'hc_4', selected: true, title: 'Complete Blood Picture (CBP) + Lipid Profile', category: 'cat_health', price: 850, affiliateLeadReward: 100, affiliateConvReward: 200, description: 'Full automated hematology analyzer panel and cholesterol breakdown.' },
+            { id: 'hc_5', selected: true, title: 'Thyroid & Vitamin D3/B12 Vitality Panel', category: 'cat_health', price: 2199, affiliateLeadReward: 220, affiliateConvReward: 500, description: 'Total T3, T4, TSH plus essential deficiency screening markers.' }
+          ]
+        },
+        {
+          name: 'Preventive Health Checkup Packages',
+          image: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=600&q=80',
+          items: [
+            { id: 'hc_6', selected: true, title: 'Senior Citizen Comprehensive Screening', category: 'cat_health', price: 4499, affiliateLeadReward: 400, affiliateConvReward: 1000, description: 'Bone density, renal, liver, cardiac, and full geriatric diagnostic evaluation.' },
+            { id: 'hc_7', selected: true, title: 'Women Advanced Wellness & Hormone Profile', category: 'cat_health', price: 3499, affiliateLeadReward: 300, affiliateConvReward: 800, description: 'Thyroid, iron profile, reproductive hormone screen, and pelvic ultrasound.' }
+          ]
+        }
       ]
-    },
-    {
-      name: 'Diagnostic Clinical Rate Card (8 Tests)',
-      image: 'https://images.unsplash.com/photo-1579154204601-01588f351e67?auto=format&fit=crop&w=600&q=80',
-      items: [
-        { id: '1', selected: true, title: 'Comprehensive Master Health Checkup', category: 'cat_health', price: 3999, affiliateLeadReward: 350, affiliateConvReward: 900, description: '85+ blood and clinical diagnostic parameters with physician tele-consult.' },
-        { id: '2', selected: true, title: 'Cardiac Wellness & Lipid Risk Panel', category: 'cat_health', price: 2499, affiliateLeadReward: 250, affiliateConvReward: 600, description: 'ECG, Lipid Profile, Troponin, and specialized cardiac risk evaluation.' },
-        { id: '3', selected: true, title: 'Diabetes Management Screening Suite', category: 'cat_health', price: 1899, affiliateLeadReward: 200, affiliateConvReward: 450, description: 'HbA1c, fasting glucose, microalbuminuria, and kidney function tests.' },
-        { id: '4', selected: true, title: 'Executive Whole Body MRI / Imaging', category: 'cat_health', price: 8500, affiliateLeadReward: 600, affiliateConvReward: 1600, description: 'High-definition digital scanning with radiologist verified reporting.' }
+    : isIT
+    ? [
+        {
+          name: 'Cloud & Infrastructure Rate Card',
+          image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=600&q=80',
+          items: [
+            { id: 'it_1', selected: true, title: 'Cloud Architecture & Security Audit', category: 'cat_it', price: 25000, affiliateLeadReward: 1000, affiliateConvReward: 4000, description: 'End-to-end cloud infrastructure security and IAM policy verification.' },
+            { id: 'it_2', selected: true, title: 'AWS / Azure Infrastructure Cost Optimization', category: 'cat_it', price: 15000, affiliateLeadReward: 800, affiliateConvReward: 2500, description: 'Resource right-sizing, reserved instances, and waste reduction analysis.' }
+          ]
+        }
       ]
-    },
-    {
-      name: 'Corporate & Consulting Rate Sheet',
-      image: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=600&q=80',
-      items: [
-        { id: '1', selected: true, title: 'Annual Corporate Employee Health Camp', category: 'cat_corp', price: 35000, affiliateLeadReward: 1000, affiliateConvReward: 4800, description: 'On-site mobile health screening camp for IT and corporate workplaces.' },
-        { id: '2', selected: true, title: 'Retained Executive Search & Recruitment', category: 'cat_corp', price: 75000, affiliateLeadReward: 1800, affiliateConvReward: 10500, description: 'Confidential executive search for VP and Director level corporate roles.' },
-        { id: '3', selected: true, title: 'Corporate Compliance & Legal Audit', category: 'cat_corp', price: 25000, affiliateLeadReward: 800, affiliateConvReward: 3500, description: 'End-to-end statutory and employment compliance verification.' }
-      ]
-    }
-  ];
+    : [
+        {
+          name: 'Corporate & Consulting Rate Sheet',
+          image: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=600&q=80',
+          items: [
+            { id: 'cp_1', selected: true, title: 'Annual Corporate Employee Health Camp', category: 'cat_corp', price: 35000, affiliateLeadReward: 1000, affiliateConvReward: 4800, description: 'On-site mobile health screening camp for IT and corporate workplaces.' },
+            { id: 'cp_2', selected: true, title: 'Retained Executive Search & Recruitment', category: 'cat_corp', price: 75000, affiliateLeadReward: 1800, affiliateConvReward: 10500, description: 'Confidential executive search for VP and Director level corporate roles.' }
+          ]
+        }
+      ];
 
-  // Intelligent parser for OCR text or pasted menu lines
+  // Intelligent parser for OCR text or pasted service lines
   const parseOcrOrMenuText = (text: string, sourceName: string): ExtractedItem[] => {
     const combinedContext = `${text} ${sourceName} ${activeProvider.businessName}`.toLowerCase();
-    const isFood = /satyam|biryani|chicken|mutton|rice|noodles|fry|restaurant|menu|pulusu|veg|paneer|prawns|fish|chinese/i.test(combinedContext);
-    const targetCat = isFood
-      ? (categories.find((c) => c.id === 'cat_food')?.id || 'cat_food')
-      : (categories[0]?.id || 'cat_health');
+    const isDetectedHealth = /health|diag|blood|scan|test|checkup|clinic|cardiac|liver|kidney|ecg|echo|mri|xray|sugar|thyroid|urine/i.test(combinedContext);
+    const isDetectedIT = /cloud|audit|server|aws|azure|devops|docker|software|api|security/i.test(combinedContext);
+    
+    const targetCat = isDetectedHealth
+      ? (categories.find((c) => c.id === 'cat_health')?.id || 'cat_health')
+      : isDetectedIT
+      ? (categories.find((c) => c.id === 'cat_it')?.id || 'cat_it')
+      : defaultCategory;
 
-    // 1. If it explicitly relates to Satyam Restaurant menu, return the complete accurate dishes
-    if (/satyam/i.test(combinedContext) || /biryani/i.test(text)) {
-      return [
-        { id: `sat_${Date.now()}_1`, selected: true, title: 'Hyd. Chicken Dum Biryani', category: targetCat, price: 286, affiliateLeadReward: 30, affiliateConvReward: 60, description: 'Authentic Hyderabadi dum biryani with fragrant basmati rice and tender chicken.' },
-        { id: `sat_${Date.now()}_2`, selected: true, title: 'Special Chicken Fry Biryani', category: targetCat, price: 286, affiliateLeadReward: 30, affiliateConvReward: 60, description: 'Crispy seasoned chicken fry served with rich spiced biryani rice.' },
-        { id: `sat_${Date.now()}_3`, selected: true, title: 'Chicken Biryani Boneless', category: targetCat, price: 319, affiliateLeadReward: 35, affiliateConvReward: 70, description: 'Succulent boneless chicken pieces layered in fragrant aromatic biryani rice.' },
-        { id: `sat_${Date.now()}_4`, selected: true, title: 'Chicken Double Joint Biryani', category: targetCat, price: 370, affiliateLeadReward: 40, affiliateConvReward: 80, description: 'Double juicy chicken joint roasted in aromatic masala with biryani rice.' },
-        { id: `sat_${Date.now()}_5`, selected: true, title: 'Mutton Fry Biryani', category: targetCat, price: 440, affiliateLeadReward: 50, affiliateConvReward: 100, description: 'Tender marinated mutton fry tossed with authentic spicy Andhra biryani rice.' },
-        { id: `sat_${Date.now()}_6`, selected: true, title: 'Natukodi Biryani (Country Chicken)', category: targetCat, price: 440, affiliateLeadReward: 50, affiliateConvReward: 100, description: 'Traditional Andhra country chicken (natukodi) prepared with home-style roasted spices.' },
-        { id: `sat_${Date.now()}_7`, selected: true, title: 'Prawns Fry Biryani', category: targetCat, price: 362, affiliateLeadReward: 40, affiliateConvReward: 80, description: 'Spiced juicy prawns stir-fried in coastal masala with fragrant biryani rice.' },
-        { id: `sat_${Date.now()}_8`, selected: true, title: 'Special Chicken Fried Rice', category: targetCat, price: 299, affiliateLeadReward: 30, affiliateConvReward: 60, description: 'Wok-tossed Chinese fried rice with chicken bits, eggs, and rich savory sauces.' },
-        { id: `sat_${Date.now()}_9`, selected: true, title: 'Veg. Fried Rice', category: targetCat, price: 238, affiliateLeadReward: 25, affiliateConvReward: 50, description: 'Classic wok-tossed vegetable fried rice with fresh veggies and spring onions.' },
-        { id: `sat_${Date.now()}_10`, selected: true, title: 'Mutton Fry (Andhra Special)', category: targetCat, price: 399, affiliateLeadReward: 40, affiliateConvReward: 80, description: 'Slow-roasted spicy Andhra mutton starter seasoned with curry leaves and black pepper.' },
-        { id: `sat_${Date.now()}_11`, selected: true, title: 'Vanjaram Fish Fry (Seer Fish)', category: targetCat, price: 338, affiliateLeadReward: 35, affiliateConvReward: 70, description: 'Fresh seer fish steak marinated in red chili, turmeric, and pan-seared to perfection.' },
-        { id: `sat_${Date.now()}_12`, selected: true, title: 'Fish Pulusu (Traditional Tangy Gravy)', category: targetCat, price: 286, affiliateLeadReward: 30, affiliateConvReward: 60, description: 'Traditional Andhra fish curry stewed in tamarind, shallots, and fragrant spices.' },
-        { id: `sat_${Date.now()}_13`, selected: true, title: 'Satyam Biryani Family Feast (Serves 4-5)', category: targetCat, price: 1499, affiliateLeadReward: 150, affiliateConvReward: 350, description: 'Family handi biryani with starters, chicken fry, boiled eggs, and cold beverages.' },
-        { id: `sat_${Date.now()}_14`, selected: true, title: 'Corporate / Party Bulk Catering (10-15 Pax)', category: targetCat, price: 3999, affiliateLeadReward: 350, affiliateConvReward: 800, description: 'Full catering setup with multiple biryani options, Andhra non-veg gravies, and starters.' }
-      ];
-    }
-
-    // 2. Generic line-by-line regex parser for any uploaded rate card or pasted text
+    // Generic line-by-line regex parser for any uploaded rate card or pasted text
     const lines = text.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 2);
     const parsed: ExtractedItem[] = [];
 
@@ -184,7 +209,7 @@ Satyam Family Biryani Feast (Serves 4-5) 1499`
 
     try {
       const { createWorker } = await import('tesseract.js');
-      setScanStatusMessage('Scanning dish names, descriptions & prices...');
+      setScanStatusMessage('Scanning service names, deliverables & package prices...');
       const worker = await createWorker('eng');
       const ret = await worker.recognize(file);
       await worker.terminate();
@@ -194,17 +219,17 @@ Satyam Family Biryani Feast (Serves 4-5) 1499`
 
       if (items.length > 0) {
         setExtractedItems(items);
-        showNotification(`Extracted ${items.length} real dishes & prices from menu photo!`, 'success');
+        showNotification(`Extracted ${items.length} services & prices from rate card!`, 'success');
       } else {
         const fallbackItems = parseOcrOrMenuText(file.name, file.name);
         setExtractedItems(fallbackItems);
-        showNotification(`Extracted ${fallbackItems.length} menu items from rate card!`, 'success');
+        showNotification(`Extracted ${fallbackItems.length} services from rate card!`, 'success');
       }
     } catch (err) {
       console.warn('OCR error, using smart fallback', err);
       const fallbackItems = parseOcrOrMenuText(file.name, file.name);
       setExtractedItems(fallbackItems);
-      showNotification(`Extracted ${fallbackItems.length} menu items from rate card!`, 'success');
+      showNotification(`Extracted ${fallbackItems.length} services from rate card!`, 'success');
     } finally {
       setIsScanning(false);
     }
@@ -225,7 +250,7 @@ Satyam Family Biryani Feast (Serves 4-5) 1499`
       if (uploadRes.success && uploadRes.filePath) {
         setRateCardStoragePath(uploadRes.filePath);
         setRateCardStorageUrl(uploadRes.fileUrl || uploadRes.filePath);
-        showNotification('Menu photo uploaded successfully!', 'success');
+        showNotification('Rate card photo uploaded successfully!', 'success');
       }
 
       performOcrScan(file);
@@ -235,25 +260,25 @@ Satyam Family Biryani Feast (Serves 4-5) 1499`
   const loadSampleRateCard = (sample: typeof sampleRateCards[0]) => {
     setImagePreview(sample.image);
     setIsScanning(true);
-    setScanStatusMessage(`Loading verified items from ${sample.name}...`);
+    setScanStatusMessage(`Loading verified services from ${sample.name}...`);
     setTimeout(() => {
       setExtractedItems(sample.items);
       setIsScanning(false);
-      showNotification(`Loaded ${sample.items.length} items from ${sample.name}!`, 'success');
+      showNotification(`Loaded ${sample.items.length} services from ${sample.name}!`, 'success');
     }, 700);
   };
 
-  // Parse quick pasted text menu
+  // Parse quick pasted text rate card
   const handleQuickPasteSubmit = () => {
     if (!pasteMenuText.trim()) return;
     const items = parseOcrOrMenuText(pasteMenuText, activeProvider.businessName);
     if (items.length > 0) {
       setExtractedItems(items);
       setActiveTab('photo');
-      setImagePreview('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="%230A2540"/><text x="50" y="55" font-size="12" fill="white" text-anchor="middle">MENU TEXT</text></svg>');
-      showNotification(`Extracted ${items.length} services from menu text!`, 'success');
+      setImagePreview('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="%230A2540"/><text x="50" y="55" font-size="11" fill="white" text-anchor="middle">RATE CARD</text></svg>');
+      showNotification(`Extracted ${items.length} services from rate card text!`, 'success');
     } else {
-      showNotification('Could not detect prices. Ensure lines have prices like "Dish Name 286"', 'warning');
+      showNotification('Could not detect prices. Ensure lines have prices like "Service Name 2500"', 'warning');
     }
   };
 
@@ -417,7 +442,7 @@ Satyam Family Biryani Feast (Serves 4-5) 1499`
             }}
           >
             <Camera size={16} />
-            <span>📸 Snap / Upload Menu Photo (OCR)</span>
+            <span>📸 Snap / Upload Rate Card (OCR)</span>
           </button>
 
           <button
@@ -437,7 +462,7 @@ Satyam Family Biryani Feast (Serves 4-5) 1499`
             }}
           >
             <ClipboardList size={16} />
-            <span>📋 Quick Text / Menu Paste</span>
+            <span>📋 Quick Text / Rate Card Paste</span>
           </button>
 
           <button
@@ -652,17 +677,17 @@ Satyam Family Biryani Feast (Serves 4-5) 1499`
             </div>
           )}
 
-          {/* Quick Menu Text Paste Mode */}
+          {/* Quick Rate Card Text Paste Mode */}
           {activeTab === 'paste' && (
             <div>
               <div style={{ backgroundColor: 'var(--brand-cobalt-light)', padding: '16px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)', marginBottom: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '12px' }}>
                   <div>
                     <h4 style={{ fontSize: '0.98rem', fontWeight: 800, color: 'var(--brand-navy)', margin: '0 0 4px 0' }}>
-                      📋 Fast Menu Text Extractor
+                      📋 Fast Rate Card & Price Extractor
                     </h4>
                     <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                      Paste or edit dishes and prices (e.g. <code>Hyd. Chicken Dum Biryani 286</code>). It extracts dishes and sets referral commissions automatically.
+                      Paste or edit service packages and prices line by line. The system automatically parses each service and calculates affiliate referral commissions.
                     </span>
                   </div>
                   <button
@@ -670,29 +695,11 @@ Satyam Family Biryani Feast (Serves 4-5) 1499`
                     className="btn btn-outline btn-sm"
                     style={{ backgroundColor: '#FFF' }}
                     onClick={() => {
-                      setPasteMenuText(
-`Mini Hyd. Chicken Dum Biryani 143
-Mini Chicken Fry Biryani 143
-Hyd. Chicken Dum Biryani 286
-Special Chicken Fry Biryani 286
-Chicken Biryani Boneless 319
-Chicken Double Joint Biryani 370
-Mutton Fry Biryani 440
-Natukodi Biryani (Country Chicken) 440
-Prawns Fry Biryani 362
-Chicken Lollypop Biryani 399
-Special Chicken Fried Rice 299
-Veg. Fried Rice 238
-Mutton Fry (Andhra Special) 399
-Vanjaram Fish Fry 338
-Fish Pulusu 286
-Satyam Family Biryani Feast (Serves 4-5) 1499
-Corporate / Party Bulk Catering (10-15 Pax) 3999`
-                      );
+                      setPasteMenuText(getProviderSampleText());
                     }}
                   >
-                    <Utensils size={14} />
-                    <span>Load Satyam Restaurant Full Menu</span>
+                    <ClipboardList size={14} />
+                    <span>Load Sample Rate Card ({activeProvider.businessName})</span>
                   </button>
                 </div>
 
@@ -702,7 +709,13 @@ Corporate / Party Bulk Catering (10-15 Pax) 3999`
                   style={{ fontFamily: 'monospace', fontSize: '0.86rem', lineHeight: 1.5, backgroundColor: '#FFF' }}
                   value={pasteMenuText}
                   onChange={(e) => setPasteMenuText(e.target.value)}
-                  placeholder="Paste your menu items and prices here:&#10;Hyd. Chicken Dum Biryani 286&#10;Mutton Fry Biryani 440&#10;Vanjaram Fish Fry 338"
+                  placeholder={
+                    isHealthcare
+                      ? `Paste your diagnostic tests and package prices here line by line:\nComprehensive Master Health Checkup 3999\nExecutive Cardiac & Diabetes Screening 6499\nComplete Blood Picture (CBP) 350\nLipid Profile Panel 650\nDiabetes Screening Package 850\nThyroid Function Test 550`
+                      : isIT
+                      ? `Paste your IT and cloud service offerings line by line:\nCloud Architecture & Security Audit 25000\nAWS Cost Optimization 15000`
+                      : `Paste your service offerings and prices here line by line:\nService Package Name 2500\nAdvanced Comprehensive Plan 5000`
+                  }
                 />
 
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
@@ -712,7 +725,7 @@ Corporate / Party Bulk Catering (10-15 Pax) 3999`
                     onClick={handleQuickPasteSubmit}
                   >
                     <Sparkles size={16} />
-                    <span>⚡ Auto-Extract All Dishes & Prices</span>
+                    <span>⚡ Auto-Extract All Services & Prices</span>
                   </button>
                 </div>
               </div>
