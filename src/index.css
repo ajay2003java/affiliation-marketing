@@ -1324,14 +1324,16 @@ body {
     flex-shrink: 0 !important;
   }
 
-  /* 2. Unified Hero Banner (Straight flat border across all devices: Mac, iPhone, Android) */
+  /* 2. Full-Viewport Hero Banner (Full initial screen, perfectly flat bottom edge, zero half-half) */
   .b2b-hero-banner {
-    min-height: auto !important;
+    min-height: calc(100vh - 50px) !important;
+    min-height: calc(100svh - 50px) !important;
+    min-height: calc(100dvh - 50px) !important;
     display: flex !important;
     flex-direction: column !important;
-    justify-content: flex-start !important;
+    justify-content: center !important;
     align-items: center !important;
-    padding: 44px 16px 48px !important;
+    padding: 24px 16px 28px !important;
     border-radius: 0 !important;
     border-bottom-left-radius: 0 !important;
     border-bottom-right-radius: 0 !important;
