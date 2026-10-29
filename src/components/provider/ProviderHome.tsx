@@ -22,7 +22,8 @@ import {
   ChevronRight,
   Sparkles,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Building2
 } from 'lucide-react';
 
 export const ProviderHome: React.FC = () => {
@@ -37,23 +38,17 @@ export const ProviderHome: React.FC = () => {
   } = useData();
   const { activeProviderId, showNotification } = useApp();
 
-  const activeProvider: Provider =
+  const activeProvider: Provider | undefined =
     providers.find((p) => p.id === activeProviderId) ||
-    providers.find((p) => p.businessName.toLowerCase().includes('dhanvika')) ||
     providers[0];
 
-  // Referrals and Offerings belonging to this provider (supports both DB UUID & mock ID)
-  const isDhanvika = activeProvider.businessName.toLowerCase().includes('dhanvika');
-  const providerReferrals = referrals.filter(
-    (r) =>
-      r.providerId === activeProvider.id ||
-      (isDhanvika && (r.providerId === 'prov_dhanvika' || r.providerId === 'b1111111-1111-1111-1111-111111111111'))
-  );
-  const providerOfferings = offerings.filter(
-    (o) =>
-      o.providerId === activeProvider.id ||
-      (isDhanvika && (o.providerId === 'prov_dhanvika' || o.providerId === 'b1111111-1111-1111-1111-111111111111'))
-  );
+  // Referrals and Offerings belonging to this provider
+  const providerReferrals = activeProvider
+    ? referrals.filter((r) => r.providerId === activeProvider.id)
+    : [];
+  const providerOfferings = activeProvider
+    ? offerings.filter((o) => o.providerId === activeProvider.id)
+    : [];
 
   // Modal: Add Service / Rate Card
   const [showAddServiceModal, setShowAddServiceModal] = useState(false);
@@ -154,6 +149,20 @@ export const ProviderHome: React.FC = () => {
     setActiveModal(null);
     setActionNotes('');
   };
+
+  if (!activeProvider) {
+    return (
+      <div style={{ maxWidth: '800px', margin: '40px auto', padding: '48px 24px', textAlign: 'center', backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid var(--border-light)' }}>
+        <Building2 size={48} color="var(--brand-cobalt)" style={{ margin: '0 auto 16px' }} />
+        <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--brand-navy)', marginBottom: '8px' }}>
+          No Provider Business Onboarded Yet
+        </h2>
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', maxWidth: '520px', margin: '0 auto 24px', lineHeight: 1.55 }}>
+          The system database is currently in clean production state. You can register your provider business on the landing page, or an Admin can onboard a business with an MoU agreement in the Admin Portal.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '16px 20px 48px' }}>

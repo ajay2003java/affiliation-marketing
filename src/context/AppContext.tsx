@@ -59,12 +59,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(savedSession ? savedSession.isAuthenticated : false);
-  const [currentRole, setCurrentRole] = useState<UserRole>(savedSession ? savedSession.currentRole : 'affiliate');
+  const [currentRole, setCurrentRole] = useState<UserRole>(savedSession ? savedSession.currentRole : 'admin');
   const [currentUser, setCurrentUser] = useState<User>(
-    savedSession?.currentUser || MOCK_USERS.affiliate
+    savedSession?.currentUser || MOCK_USERS.admin
   );
   const [activeProviderId, setActiveProviderId] = useState<string>(
-    savedSession?.activeProviderId || 'prov_dhanvika'
+    savedSession?.activeProviderId || ''
   );
   const [activeTab, setActiveTab] = useState<string>(() => {
     if (savedSession?.activeTab) return savedSession.activeTab;
@@ -122,7 +122,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     // 1. Admin role check
-    if (cleanEmail === MOCK_USERS.admin.email.toLowerCase() || cleanEmail === 'admin@ottobon.in') {
+    if (cleanEmail === MOCK_USERS.admin.email.toLowerCase() || cleanEmail === 'admin@ottobon.in' || cleanEmail === 'academy@ottobon.in') {
       setCurrentUser(MOCK_USERS.admin);
       setCurrentRole('admin');
       setActiveTab('admin_clients');
@@ -131,45 +131,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: true };
     }
 
-    // 2. Provider accounts check (Dhanvika Diagnostics & Registered Providers)
-    if (
-      cleanEmail === 'dhanvikadiagnostics@gmail.com' ||
-      cleanEmail === 'kumar@dhanvikadiag.in' ||
-      cleanEmail === MOCK_USERS.provider.email.toLowerCase()
-    ) {
-      setCurrentUser(MOCK_USERS.provider);
-      setActiveProviderId('prov_dhanvika');
-      setCurrentRole('provider');
-      setActiveTab('provider_home');
-      setIsAuthenticated(true);
-      showNotification(`Signed in to Provider Portal (Dhanvika Diagnostics).`, 'success');
-      return { success: true };
-    }
-
-    if (cleanEmail === 'partners@apexcloud.io') {
-      const apexUser = MOCK_USERS.provider_apex || {
-        id: 'usr_prov_02',
-        name: 'Deepak Rao',
-        email: 'partners@apexcloud.io',
-        role: 'provider',
-        phone: '+91 94401 22880',
-        providerId: 'prov_apex'
-      };
-      setCurrentUser(apexUser);
-      setActiveProviderId('prov_apex');
-      setCurrentRole('provider');
-      setActiveTab('provider_home');
-      setIsAuthenticated(true);
-      showNotification(`Signed in to Provider Portal (Apex Cloud Systems).`, 'success');
-      return { success: true };
-    }
-
+    // 2. Provider accounts check (Registered Providers only)
     const foundSavedProvider = savedProviderUsers.find(
       (p) => p.email.toLowerCase() === cleanEmail
     );
     if (foundSavedProvider) {
       setCurrentUser(foundSavedProvider);
-      setActiveProviderId(foundSavedProvider.providerId || 'prov_dhanvika');
+      setActiveProviderId(foundSavedProvider.providerId || '');
       setCurrentRole('provider');
       setActiveTab('provider_home');
       setIsAuthenticated(true);
@@ -177,20 +145,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: true };
     }
 
-    // 3. Affiliate accounts check (Self-Registered Affiliates or default affiliate)
-    if (
-      cleanEmail === MOCK_USERS.affiliate.email.toLowerCase() ||
-      cleanEmail === 'arjun@consultant.in' ||
-      cleanEmail === 'arjun.verma@networkhub.in'
-    ) {
-      setCurrentUser(MOCK_USERS.affiliate);
-      setCurrentRole('affiliate');
-      setActiveTab('affiliate_dashboard');
-      setIsAuthenticated(true);
-      showNotification(`Welcome back, ${MOCK_USERS.affiliate.name}! Connected to Affiliate Workspace.`, 'success');
-      return { success: true };
-    }
-
+    // 3. Affiliate accounts check (Self-Registered Affiliates only)
     const foundSavedAffiliate = savedAffiliateUsers.find(
       (a) => a.email.toLowerCase() === cleanEmail
     );
@@ -203,7 +158,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: true };
     }
 
-    // 4. Production-Ready Response
+    // 4. Production response for non-existent users
     return {
       success: false,
       error: 'Invalid email or password. Please verify your credentials or register a new account.'
@@ -227,101 +182,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 1. Role: Affiliate
     if (role === 'affiliate') {
-      if (cleanEmail === MOCK_USERS.provider.email.toLowerCase() || cleanEmail === 'partners@apexcloud.io') {
+      const found = savedAffiliateUsers.find((a) => a.email.toLowerCase() === cleanEmail);
+      if (!found) {
         return {
           success: false,
-          error: 'This email is registered as a Client Provider. Please switch to the "Client Provider" tab to log in.'
-        };
-      }
-      if (cleanEmail === MOCK_USERS.admin.email.toLowerCase()) {
-        return {
-          success: false,
-          error: 'This email is registered as Company Admin Staff. Please switch to the "Admin Operations Desk" tab to log in.'
+          error: 'Affiliate account not found. Please register as an Affiliate Partner.'
         };
       }
 
-      const user: User = {
-        id: cleanEmail === MOCK_USERS.affiliate.email.toLowerCase() ? MOCK_USERS.affiliate.id : `usr_aff_${Date.now()}`,
-        name: cleanEmail === MOCK_USERS.affiliate.email.toLowerCase() ? MOCK_USERS.affiliate.name : (cleanEmail.split('@')[0] || 'Affiliate Partner'),
-        email: cleanEmail,
-        role: 'affiliate',
-        phone: cleanEmail === MOCK_USERS.affiliate.email.toLowerCase() ? MOCK_USERS.affiliate.phone : '+91 98450 11223'
-      };
-
-      setCurrentUser(user);
+      setCurrentUser(found);
       setCurrentRole('affiliate');
       setActiveTab('affiliate_dashboard');
       setIsAuthenticated(true);
-      showNotification(`Welcome back, ${user.name}! Connected to Affiliate Workspace.`, 'success');
+      showNotification(`Welcome back, ${found.name}! Connected to Affiliate Workspace.`, 'success');
       return { success: true };
     }
 
     // 2. Role: Provider
     if (role === 'provider') {
-      if (cleanEmail === MOCK_USERS.affiliate.email.toLowerCase()) {
+      const found = savedProviderUsers.find((p) => p.email.toLowerCase() === cleanEmail);
+      if (!found) {
         return {
           success: false,
-          error: 'This email is registered as an Affiliate Partner. Please switch to the "Affiliate Partner" tab to log in.'
-        };
-      }
-      if (cleanEmail === MOCK_USERS.admin.email.toLowerCase() && !providerId) {
-        return {
-          success: false,
-          error: 'This is the Company Admin email. Please switch to the "Admin Operations Desk" tab.'
+          error: 'Provider account not registered. Please contact Admin or apply as a Provider.'
         };
       }
 
-      let targetProvId = providerId || 'prov_dhanvika';
-      let provUser: User = MOCK_USERS.provider;
-
-      if (cleanEmail === 'partners@apexcloud.io' || targetProvId === 'prov_apex') {
-        targetProvId = 'prov_apex';
-        provUser = MOCK_USERS.provider_apex || {
-          id: 'usr_prov_02',
-          name: 'Deepak Rao',
-          email: 'partners@apexcloud.io',
-          role: 'provider',
-          phone: '+91 94401 22880',
-          providerId: 'prov_apex'
-        };
-      } else if (cleanEmail === 'academy@ottobon.in' || targetProvId === 'prov_ottobon') {
-        targetProvId = 'prov_ottobon';
-        provUser = {
-          id: 'usr_prov_03',
-          name: 'Bhanu Bonu (Ottobon Rep)',
-          email: 'academy@ottobon.in',
-          role: 'provider',
-          phone: '+91 891 254 8899',
-          providerId: 'prov_ottobon'
-        };
-      } else if (cleanEmail === MOCK_USERS.provider.email.toLowerCase() || targetProvId === 'prov_dhanvika') {
-        targetProvId = 'prov_dhanvika';
-        provUser = MOCK_USERS.provider;
-      } else {
-        const found = savedProviderUsers.find((p) => p.email.toLowerCase() === cleanEmail);
-        targetProvId = found?.providerId || providerId || `prov_${Date.now()}`;
-        provUser = found || {
-          id: `usr_prov_${Date.now()}`,
-          name: cleanEmail.split('@')[0] || 'Authorized Provider SPOC',
-          email: cleanEmail,
-          role: 'provider',
-          phone: '+91 98850 99887',
-          providerId: targetProvId
-        };
-      }
-
-      setCurrentUser(provUser);
-      setActiveProviderId(targetProvId);
+      setCurrentUser(found);
+      setActiveProviderId(found.providerId || providerId || '');
       setCurrentRole('provider');
       setActiveTab('provider_home');
       setIsAuthenticated(true);
-      showNotification(`Signed in to Provider Portal as ${provUser.name}.`, 'success');
+      showNotification(`Signed in to Provider Portal as ${found.name}.`, 'success');
       return { success: true };
     }
 
     // 3. Role: Admin
     if (role === 'admin') {
-      if (cleanEmail !== MOCK_USERS.admin.email.toLowerCase() && cleanEmail !== 'admin@ottobon.in') {
+      if (cleanEmail !== MOCK_USERS.admin.email.toLowerCase() && cleanEmail !== 'admin@ottobon.in' && cleanEmail !== 'academy@ottobon.in') {
         return {
           success: false,
           error: 'Restricted Access: Public self-registration is disabled for Admin Operations. Only authorized Ottobon staff accounts (@ottobon.in) are permitted.'
@@ -353,12 +251,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (
-      cleanEmail === MOCK_USERS.provider.email.toLowerCase() ||
-      cleanEmail === 'partners@apexcloud.io' ||
       cleanEmail === MOCK_USERS.admin.email.toLowerCase() ||
+      cleanEmail === 'admin@ottobon.in' ||
+      cleanEmail === 'academy@ottobon.in' ||
       savedProviderUsers.some((p) => p.email.toLowerCase() === cleanEmail)
     ) {
-      return { success: false, error: 'This email is already associated with a Provider or Admin account.' };
+      return { success: false, error: 'This email is already associated with an Admin or Provider account.' };
     }
 
     const newUser: User = {

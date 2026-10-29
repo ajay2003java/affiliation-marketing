@@ -9,13 +9,22 @@ export const OfferingManager: React.FC = () => {
   const { offerings, providers, updateOffering } = useData();
   const { activeProviderId, showNotification } = useApp();
 
-  const activeProvider: Provider = providers.find((p) => p.id === activeProviderId) || providers[0];
+  const activeProvider: Provider | undefined = providers.find((p) => p.id === activeProviderId) || providers[0];
 
   // Dynamic: Offerings belonging to the currently active provider
-  const providerOfferings = offerings.filter((o) => o.providerId === activeProvider.id);
+  const providerOfferings = activeProvider ? offerings.filter((o) => o.providerId === activeProvider.id) : [];
 
   const [showModal, setShowModal] = useState(false);
   const [editingOffering, setEditingOffering] = useState<ProviderOffering | null>(null);
+
+  if (!activeProvider) {
+    return (
+      <div className="card" style={{ padding: '48px 24px', textAlign: 'center' }}>
+        <h3 style={{ fontSize: '1.2rem', color: 'var(--brand-navy)' }}>No Provider Business Found</h3>
+        <p style={{ color: 'var(--text-muted)' }}>No provider business is registered in the database yet.</p>
+      </div>
+    );
+  }
 
   // Toggle offering active/paused status
   const handleToggleOfferingStatus = (offering: ProviderOffering) => {

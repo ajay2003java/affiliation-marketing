@@ -8,7 +8,19 @@ export const AgreementView: React.FC = () => {
   const { providers, offerings } = useData();
   const { activeProviderId } = useApp();
 
-  const activeProvider: Provider = providers.find((p) => p.id === activeProviderId) || providers[0];
+  const activeProvider: Provider | undefined = providers.find((p) => p.id === activeProviderId) || providers[0];
+
+  if (!activeProvider) {
+    return (
+      <div style={{ maxWidth: '880px', margin: '0 auto' }}>
+        <div className="card" style={{ padding: '48px 24px', textAlign: 'center' }}>
+          <h3 style={{ fontSize: '1.2rem', color: 'var(--brand-navy)' }}>No Active MoU Found</h3>
+          <p style={{ color: 'var(--text-muted)' }}>No provider business is registered in the database yet.</p>
+        </div>
+      </div>
+    );
+  }
+
   const activeAgreement = activeProvider.activeAgreements && activeProvider.activeAgreements[0];
 
   return (

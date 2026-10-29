@@ -746,59 +746,89 @@ export const LandingPage: React.FC = () => {
           </div>
 
           {/* Offerings Grid */}
-          <div className="landing-grid-cards">
-            {filteredOfferings.map((offering) => {
-              const provider = providers.find((p) => p.id === offering.providerId);
-              const leadRule = offering.rewardRules.find((r) => r.eventType === 'qualified_lead');
-              const convRule = offering.rewardRules.find((r) => r.eventType === 'successful_conversion');
+          {filteredOfferings.length === 0 ? (
+            <div
+              style={{
+                textAlign: 'center',
+                padding: '48px 24px',
+                backgroundColor: '#FFFFFF',
+                borderRadius: '12px',
+                border: '1px solid #E2E8F0',
+                maxWidth: '600px',
+                margin: '0 auto'
+              }}
+            >
+              <Building2 size={40} color="#0052CC" style={{ margin: '0 auto 14px' }} />
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#0A2540', marginBottom: '8px' }}>
+                New Verified Provider Offerings Coming Soon
+              </h3>
+              <p style={{ fontSize: '0.86rem', color: '#64748B', lineHeight: 1.55, marginBottom: '20px' }}>
+                Our network is currently onboarding licensed service providers under signed MoU agreements. Check back shortly or register your business to feature your offerings here.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowProviderModal(true)}
+                className="b2b-btn-primary"
+                style={{ fontSize: '0.86rem', padding: '10px 22px' }}
+              >
+                Register Your Business
+              </button>
+            </div>
+          ) : (
+            <div className="landing-grid-cards">
+              {filteredOfferings.map((offering) => {
+                const provider = providers.find((p) => p.id === offering.providerId);
+                const leadRule = offering.rewardRules.find((r) => r.eventType === 'qualified_lead');
+                const convRule = offering.rewardRules.find((r) => r.eventType === 'successful_conversion');
 
-              return (
-                <div key={offering.id} className="b2b-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                      <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>{provider?.businessName || 'Verified Provider'}</span>
-                      <span className="badge badge-success" style={{ fontSize: '0.7rem' }}>
-                        Verified Partner
-                      </span>
-                    </div>
-
-                    <h3 style={{ fontSize: '1.08rem', fontWeight: 700, color: '#0A2540', marginBottom: '8px', lineHeight: 1.35 }}>
-                      {offering.title}
-                    </h3>
-                    <p style={{ fontSize: '0.82rem', color: '#64748B', lineHeight: 1.5, marginBottom: '18px' }}>
-                      {offering.description}
-                    </p>
-                  </div>
-
-                  <div>
-                    <div style={{ backgroundColor: '#F8FAFC', borderRadius: '8px', padding: '12px', border: '1px solid #E2E8F0', marginBottom: '16px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', fontSize: '0.82rem' }}>
-                        <span style={{ color: '#64748B' }}>Retail Service Price:</span>
-                        <strong style={{ color: '#0F172A' }}>₹{offering.customerPriceRupees.toLocaleString('en-IN')}</strong>
+                return (
+                  <div key={offering.id} className="b2b-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                        <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600 }}>{provider?.businessName || 'Verified Provider'}</span>
+                        <span className="badge badge-success" style={{ fontSize: '0.7rem' }}>
+                          Verified Partner
+                        </span>
                       </div>
 
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
-                        <span style={{ color: '#0052CC', fontWeight: 600 }}>Affiliate Reward:</span>
-                        <strong style={{ color: '#0E8A5E', fontSize: '0.92rem' }}>
-                          {convRule ? `₹${convRule.affiliateRewardRupees.toLocaleString('en-IN')}` : leadRule ? `₹${leadRule.affiliateRewardRupees.toLocaleString('en-IN')}` : 'Variable'}
-                        </strong>
-                      </div>
+                      <h3 style={{ fontSize: '1.08rem', fontWeight: 700, color: '#0A2540', marginBottom: '8px', lineHeight: 1.35 }}>
+                        {offering.title}
+                      </h3>
+                      <p style={{ fontSize: '0.82rem', color: '#64748B', lineHeight: 1.5, marginBottom: '18px' }}>
+                        {offering.description}
+                      </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setShowSignUpModal(true)}
-                      className="b2b-btn-primary"
-                      style={{ width: '100%', justifyContent: 'center', fontSize: '0.85rem', padding: '10px 16px' }}
-                    >
-                      <span>Refer a Client</span>
-                      <ArrowRight size={14} />
-                    </button>
+                    <div>
+                      <div style={{ backgroundColor: '#F8FAFC', borderRadius: '8px', padding: '12px', border: '1px solid #E2E8F0', marginBottom: '16px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', fontSize: '0.82rem' }}>
+                          <span style={{ color: '#64748B' }}>Retail Service Price:</span>
+                          <strong style={{ color: '#0F172A' }}>₹{offering.customerPriceRupees.toLocaleString('en-IN')}</strong>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
+                          <span style={{ color: '#0052CC', fontWeight: 600 }}>Affiliate Reward:</span>
+                          <strong style={{ color: '#0E8A5E', fontSize: '0.92rem' }}>
+                            {convRule ? `₹${convRule.affiliateRewardRupees.toLocaleString('en-IN')}` : leadRule ? `₹${leadRule.affiliateRewardRupees.toLocaleString('en-IN')}` : 'Variable'}
+                          </strong>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowSignUpModal(true)}
+                        className="b2b-btn-primary"
+                        style={{ width: '100%', justifyContent: 'center', fontSize: '0.85rem', padding: '10px 16px' }}
+                      >
+                        <span>Refer a Client</span>
+                        <ArrowRight size={14} />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </section>
       ) : (
         /* PROVIDER - WHO CAN JOIN (Clear & Visual) */
@@ -827,7 +857,7 @@ export const LandingPage: React.FC = () => {
                 Blood tests, scans, full body checkups, and company health camps.
               </p>
               <div style={{ backgroundColor: '#F8FAFC', padding: '10px 14px', borderRadius: '6px', fontSize: '0.8rem', color: '#0F172A', border: '1px solid #E2E8F0' }}>
-                Active Partner: <strong>Dhanvika Diagnostics</strong>
+                Category Focus: <strong>Pathology, Imaging & Diagnostics</strong>
               </div>
             </div>
 
@@ -845,7 +875,7 @@ export const LandingPage: React.FC = () => {
                 Websites, cloud support, custom software, and cyber security.
               </p>
               <div style={{ backgroundColor: '#F8FAFC', padding: '10px 14px', borderRadius: '6px', fontSize: '0.8rem', color: '#0F172A', border: '1px solid #E2E8F0' }}>
-                Active Partner: <strong>Ottobon Cloud Labs</strong>
+                Category Focus: <strong>Cloud Architecture, IT & Security</strong>
               </div>
             </div>
 
@@ -863,7 +893,7 @@ export const LandingPage: React.FC = () => {
                 Company registration, GST, tax filings, legal agreements, and audits.
               </p>
               <div style={{ backgroundColor: '#F8FAFC', padding: '10px 14px', borderRadius: '6px', fontSize: '0.8rem', color: '#0F172A', border: '1px solid #E2E8F0' }}>
-                Active Partner: <strong>Vertex Corporate Advisory</strong>
+                Category Focus: <strong>Legal, Tax & Corporate Compliance</strong>
               </div>
             </div>
           </div>
@@ -1237,7 +1267,7 @@ export const LandingPage: React.FC = () => {
                     <input
                       type="text"
                       className="form-input"
-                      placeholder="e.g. Dhanvika Diagnostics"
+                      placeholder="e.g. Acme Health Solutions or Apex Tech"
                       value={provBizName}
                       onChange={(e) => setProvBizName(e.target.value)}
                       required

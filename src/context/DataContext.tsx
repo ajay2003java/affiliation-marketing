@@ -88,11 +88,15 @@ interface DataContextType {
   resetToDefaults: () => void;
 }
 
-const STORAGE_KEY = 'affiliate_platform_prod_v1';
+const STORAGE_KEY = 'affiliate_platform_prod_v5';
 
 // One-time purge of legacy mock data stored during development
 try {
   const legacyKeys = [
+    'affiliate_platform_prod_v1',
+    'affiliate_platform_prod_v2',
+    'affiliate_platform_prod_v3',
+    'affiliate_platform_prod_v4',
     'affiliate_referral_platform_data_v2',
     'affiliate_referral_platform_data_v2_providers',
     'affiliate_referral_platform_data_v2_offerings',
@@ -105,7 +109,19 @@ try {
     'affiliate_referral_platform_data_v2_contacts',
     'affiliate_referral_platform_data_v2_affiliate_profile'
   ];
-  legacyKeys.forEach((key) => localStorage.removeItem(key));
+  legacyKeys.forEach((key) => {
+    localStorage.removeItem(key);
+    localStorage.removeItem(`${key}_providers`);
+    localStorage.removeItem(`${key}_offerings`);
+    localStorage.removeItem(`${key}_referrals`);
+    localStorage.removeItem(`${key}_commissions`);
+    localStorage.removeItem(`${key}_payouts`);
+    localStorage.removeItem(`${key}_audits`);
+    localStorage.removeItem(`${key}_contacts`);
+    localStorage.removeItem(`${key}_affiliate_profile`);
+    localStorage.removeItem(`${key}_categories`);
+    localStorage.removeItem(`${key}_services`);
+  });
 } catch {
   // ignore
 }
@@ -113,9 +129,9 @@ try {
 export const INITIAL_AFFILIATE_PROFILE: AffiliateProfile = {
   userId: 'usr_aff_01',
   earningModes: 'both',
-  occupation: 'Affiliate Partner',
-  networkTypes: ['Professional Network'],
-  interests: ['Healthcare Diagnostics', 'Corporate Training'],
+  occupation: '',
+  networkTypes: [],
+  interests: [],
   preferredArea: 'Hyderabad',
   totalEarnedRupees: 0,
   pendingRewardRupees: 0,
@@ -242,14 +258,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (isMounted && dbProviders && dbProviders.length > 0) {
           setProviders((prev) => {
             const dbProviderIds = new Set(dbProviders.map((p) => p.id));
-            const hasDbDhanvika = dbProviders.some((p) => p.business_name?.toLowerCase().includes('dhanvika'));
-            
-            // Filter out mock Dhanvika if Supabase has Dhanvika
-            const filteredPrev = prev.filter((p) => {
-              if (dbProviderIds.has(p.id)) return false;
-              if (hasDbDhanvika && (p.id === 'prov_dhanvika' || p.businessName.toLowerCase().includes('dhanvika'))) return false;
-              return true;
-            });
+            const filteredPrev = prev.filter((p) => !dbProviderIds.has(p.id));
 
             const newOnes: Provider[] = dbProviders.map((dbp) => ({
               id: dbp.id,
@@ -278,15 +287,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (isMounted && dbOfferings && dbOfferings.length > 0) {
           setOfferings((prev) => {
             const dbOfferingIds = new Set(dbOfferings.map((o) => o.id));
-            const hasDhanvikaDbOfferings = dbOfferings.some(
-              (o) => o.provider_id === 'b1111111-1111-1111-1111-111111111111'
-            );
-
-            const filteredPrev = prev.filter((o) => {
-              if (dbOfferingIds.has(o.id)) return false;
-              if (hasDhanvikaDbOfferings && o.providerId === 'prov_dhanvika') return false;
-              return true;
-            });
+            const filteredPrev = prev.filter((o) => !dbOfferingIds.has(o.id));
 
             const newOnes: ProviderOffering[] = dbOfferings.map((dbo) => ({
               id: dbo.id,
@@ -322,15 +323,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (isMounted && dbReferrals && dbReferrals.length > 0) {
           setReferrals((prev) => {
             const dbReferralIds = new Set(dbReferrals.map((r) => r.id));
-            const hasDhanvikaDbReferrals = dbReferrals.some(
-              (r) => r.provider_id === 'b1111111-1111-1111-1111-111111111111'
-            );
-
-            const filteredPrev = prev.filter((r) => {
-              if (dbReferralIds.has(r.id)) return false;
-              if (hasDhanvikaDbReferrals && r.providerId === 'prov_dhanvika') return false;
-              return true;
-            });
+            const filteredPrev = prev.filter((r) => !dbReferralIds.has(r.id));
 
             const newOnes: Referral[] = dbReferrals.map((dbr) => ({
               id: dbr.id,

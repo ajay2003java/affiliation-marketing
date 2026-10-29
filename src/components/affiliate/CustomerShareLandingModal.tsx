@@ -157,36 +157,42 @@ export const CustomerShareLandingModal: React.FC<CustomerShareLandingModalProps>
                 </h4>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '18px' }}>
-                  {activeOfferings.map((offering) => {
-                    const isSelected = offering.id === selectedOfferingId;
-                    const prov = providers.find((p) => p.id === offering.providerId);
-                    return (
-                      <div
-                        key={offering.id}
-                        style={{
-                          padding: '12px 14px',
-                          borderRadius: 'var(--radius-md)',
-                          border: isSelected ? '2px solid var(--brand-cobalt)' : '1px solid var(--border-light)',
-                          backgroundColor: isSelected ? 'var(--brand-cobalt-light)' : 'var(--bg-surface)',
-                          cursor: 'pointer',
-                          transition: 'var(--transition)'
-                        }}
-                        onClick={() => setSelectedOfferingId(offering.id)}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                          <strong style={{ fontSize: '0.88rem', color: isSelected ? 'var(--brand-cobalt)' : 'var(--text-main)' }}>
-                            {offering.title}
-                          </strong>
-                          <span className="num-tabular" style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--brand-navy)' }}>
-                            ₹{offering.customerPriceRupees.toLocaleString('en-IN')}
+                  {activeOfferings.length > 0 ? (
+                    activeOfferings.map((offering) => {
+                      const isSelected = offering.id === selectedOfferingId;
+                      const prov = providers.find((p) => p.id === offering.providerId);
+                      return (
+                        <div
+                          key={offering.id}
+                          style={{
+                            padding: '12px 14px',
+                            borderRadius: 'var(--radius-md)',
+                            border: isSelected ? '2px solid var(--brand-cobalt)' : '1px solid var(--border-light)',
+                            backgroundColor: isSelected ? 'var(--brand-cobalt-light)' : 'var(--bg-surface)',
+                            cursor: 'pointer',
+                            transition: 'var(--transition)'
+                          }}
+                          onClick={() => setSelectedOfferingId(offering.id)}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <strong style={{ fontSize: '0.88rem', color: isSelected ? 'var(--brand-cobalt)' : 'var(--text-main)' }}>
+                              {offering.title}
+                            </strong>
+                            <span className="num-tabular" style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--brand-navy)' }}>
+                              ₹{offering.customerPriceRupees.toLocaleString('en-IN')}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)', display: 'block', marginTop: '2px' }}>
+                            Provided by {prov?.businessName || 'Verified Partner'} • {offering.serviceArea}
                           </span>
                         </div>
-                        <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)', display: 'block', marginTop: '2px' }}>
-                          Provided by {prov?.businessName} • {offering.serviceArea}
-                        </span>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  ) : (
+                    <div style={{ padding: '24px 16px', textAlign: 'center', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                      No active service offerings configured yet.
+                    </div>
+                  )}
                 </div>
 
                 {selectedOffering && (
@@ -210,7 +216,7 @@ export const CustomerShareLandingModal: React.FC<CustomerShareLandingModalProps>
                   Request Verified Partner Callback
                 </h4>
                 <p style={{ fontSize: '0.76rem', color: 'var(--text-muted)', marginBottom: '14px' }}>
-                  No payment required now. {selectedProvider?.businessName} will contact you to answer queries and schedule.
+                  No payment required now. {selectedProvider?.businessName || 'The verified service provider'} will contact you to answer queries and schedule.
                 </p>
 
                 <div className="form-group">

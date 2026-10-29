@@ -36,22 +36,22 @@ export const AuthPage: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Form Fields - Affiliate Login
-  const [affLoginEmail, setAffLoginEmail] = useState('arjun.verma@networkhub.in');
-  const [affLoginPassword, setAffLoginPassword] = useState('••••••••');
+  const [affLoginEmail, setAffLoginEmail] = useState('');
+  const [affLoginPassword, setAffLoginPassword] = useState('');
 
   // Form Fields - Affiliate Sign Up
   const [affName, setAffName] = useState('');
   const [affEmail, setAffEmail] = useState('');
   const [affPhone, setAffPhone] = useState('');
-  const [affOccupation, setAffOccupation] = useState('Corporate HR Consultant & Network Lead');
+  const [affOccupation, setAffOccupation] = useState('');
   const [affCity, setAffCity] = useState('Hyderabad');
   const [affPassword, setAffPassword] = useState('');
   const [affAgreementChecked, setAffAgreementChecked] = useState(true);
 
   // Form Fields - Provider Login
-  const [provSelectId, setProvSelectId] = useState('prov_dhanvika');
-  const [provLoginEmail, setProvLoginEmail] = useState('dhanvikadiagnostics@gmail.com');
-  const [provLoginPassword, setProvLoginPassword] = useState('••••••••');
+  const [provSelectId, setProvSelectId] = useState('');
+  const [provLoginEmail, setProvLoginEmail] = useState('');
+  const [provLoginPassword, setProvLoginPassword] = useState('');
 
   // Form Fields - Provider Onboard / Sign Up
   const [provBizName, setProvBizName] = useState('');
@@ -81,43 +81,14 @@ export const AuthPage: React.FC = () => {
     }
   };
 
-  // Quick Demo Fill Handlers
-  const fillDemoAffiliate = () => {
-    setActiveRole('affiliate');
-    setAuthMode('login');
-    setAffLoginEmail('arjun.verma@networkhub.in');
-    setAffLoginPassword('demo123');
-    setErrorMessage(null);
-    showNotification('Loaded demo credentials for Affiliate Arjun Verma.', 'info');
-  };
-
-  const fillDemoProviderDhanvika = () => {
-    setActiveRole('provider');
-    setAuthMode('login');
-    setProvSelectId('prov_dhanvika');
-    setProvLoginEmail('dhanvikadiagnostics@gmail.com');
-    setProvLoginPassword('demo123');
-    setErrorMessage(null);
-    showNotification('Loaded credentials for Dhanvika Diagnostics (Healthcare).', 'info');
-  };
-
-  const fillDemoProviderApex = () => {
-    setActiveRole('provider');
-    setAuthMode('login');
-    setProvSelectId('prov_apex');
-    setProvLoginEmail('partners@apexcloud.io');
-    setProvLoginPassword('demo123');
-    setErrorMessage(null);
-    showNotification('Loaded credentials for Apex Cloud Systems (IT/Cloud).', 'info');
-  };
-
+  // Quick Admin Staff Fill Handler
   const fillDemoAdmin = () => {
     setActiveRole('admin');
     setAuthMode('login');
     setAdminEmail('academy@ottobon.in');
     setAdminKey('admin123');
     setErrorMessage(null);
-    showNotification('Loaded staff credentials for Admin Lead Bhanu Bonu.', 'info');
+    showNotification('Loaded staff credentials for Admin Bhanu Bonu.', 'info');
   };
 
   // 1. Submit Affiliate Login
@@ -370,16 +341,14 @@ export const AuthPage: React.FC = () => {
           </p>
         </div>
 
-        {/* 1-Click Quick Demo Access Bar */}
+        {/* Quick Staff Admin Access Pill */}
         <div
           style={{
-            width: '100%',
-            backgroundColor: '#FFFFFF',
-            border: '1px solid var(--border-light)',
+            backgroundColor: '#F8FAFC',
+            border: '1px solid #E2E8F0',
             borderRadius: '12px',
             padding: '12px 18px',
             marginBottom: '24px',
-            boxShadow: 'var(--shadow-sm)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -388,45 +357,18 @@ export const AuthPage: React.FC = () => {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.82rem', fontWeight: 700, color: 'var(--brand-navy)' }}>
-            <Zap size={16} color="var(--accent-coral)" />
-            <span>Quick 1-Click Testing Pills:</span>
+            <ShieldCheck size={16} color="var(--brand-navy)" />
+            <span>Authorized Operations Desk:</span>
           </div>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              id="pill-demo-affiliate"
-              className="btn btn-outline btn-sm"
-              onClick={fillDemoAffiliate}
-              style={{ fontSize: '0.76rem', padding: '5px 10px', borderColor: 'var(--brand-cobalt)', color: 'var(--brand-cobalt)' }}
-            >
-              👤 Affiliate: Arjun
-            </button>
-            <button
-              type="button"
-              id="pill-demo-provider-dhanvika"
-              className="btn btn-outline btn-sm"
-              onClick={fillDemoProviderDhanvika}
-              style={{ fontSize: '0.76rem', padding: '5px 10px', borderColor: 'var(--finance-green)', color: 'var(--finance-green)' }}
-            >
-              🏥 Provider: Dhanvika
-            </button>
-            <button
-              type="button"
-              id="pill-demo-provider-apex"
-              className="btn btn-outline btn-sm"
-              onClick={fillDemoProviderApex}
-              style={{ fontSize: '0.76rem', padding: '5px 10px', borderColor: 'var(--lead-teal)', color: 'var(--lead-teal)' }}
-            >
-              🏢 Provider: Apex Cloud
-            </button>
+          <div>
             <button
               type="button"
               id="pill-demo-admin"
               className="btn btn-outline btn-sm"
               onClick={fillDemoAdmin}
-              style={{ fontSize: '0.76rem', padding: '5px 10px', borderColor: 'var(--brand-navy)', color: 'var(--brand-navy)', fontWeight: 700 }}
+              style={{ fontSize: '0.78rem', padding: '6px 14px', borderColor: 'var(--brand-navy)', color: 'var(--brand-navy)', fontWeight: 700 }}
             >
-              🛡️ Admin: Staff Lead
+              🛡️ Admin Staff Access (academy@ottobon.in)
             </button>
           </div>
         </div>
@@ -724,13 +666,10 @@ export const AuthPage: React.FC = () => {
                         style={{ paddingLeft: '38px', width: '100%' }}
                         value={affLoginEmail}
                         onChange={(e) => setAffLoginEmail(e.target.value)}
-                        placeholder="e.g. arjun.verma@networkhub.in"
+                        placeholder="e.g. partner@example.com"
                         required
                       />
                     </div>
-                    <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-                      Demo affiliate account: <code style={{ color: 'var(--brand-cobalt)' }}>arjun.verma@networkhub.in</code>
-                    </span>
                   </div>
 
                   <div style={{ marginBottom: '24px' }}>
@@ -1003,11 +942,15 @@ export const AuthPage: React.FC = () => {
                           if (p) setProvLoginEmail(p.email);
                         }}
                       >
-                        {providers.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.businessName} ({p.city}) — SPOC: {p.contactPerson}
-                          </option>
-                        ))}
+                        {providers.length > 0 ? (
+                          providers.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.businessName} ({p.city}) — SPOC: {p.contactPerson}
+                            </option>
+                          ))
+                        ) : (
+                          <option value="">No onboarded provider businesses yet</option>
+                        )}
                       </select>
                     </div>
                   </div>
@@ -1025,7 +968,7 @@ export const AuthPage: React.FC = () => {
                         style={{ paddingLeft: '38px', width: '100%' }}
                         value={provLoginEmail}
                         onChange={(e) => setProvLoginEmail(e.target.value)}
-                        placeholder="e.g. dhanvikadiagnostics@gmail.com"
+                        placeholder="e.g. partner@business.com"
                         required
                       />
                     </div>

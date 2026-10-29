@@ -2,7 +2,6 @@ import React, { useState, useRef } from 'react';
 import { useData } from '../../context/DataContext';
 import { useApp } from '../../context/AppContext';
 import { Provider, Referral, OfferingRewardRule } from '../../types';
-import { MOCK_USERS } from '../../services/mockData';
 import {
   Building2,
   Plus,
@@ -587,9 +586,7 @@ export const AdminClientManager: React.FC = () => {
                           className="btn btn-outline btn-sm"
                           style={{ padding: '4px 8px', fontSize: '0.74rem', color: 'var(--brand-cobalt)', borderColor: '#BAE6FD' }}
                           onClick={() => {
-                            const provUser = savedProviderUsers.find((u) => u.providerId === provider.id) ||
-                              (provider.id === 'prov_dhanvika' ? MOCK_USERS.provider :
-                               provider.id === 'prov_apex' ? MOCK_USERS.provider_apex : null);
+                            const provUser = savedProviderUsers.find((u) => u.providerId === provider.id);
 
                             setHandoverCard({
                               businessName: provider.businessName,
