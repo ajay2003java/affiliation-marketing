@@ -37,6 +37,10 @@ import {
   recordAdminMouUpload,
   syncProviderToSupabase
 } from '../../services/supabaseClient';
+import {
+  extractRawTextFromMouFile,
+  parseMouDetails
+} from '../../services/mouParser';
 
 export const AdminClientManager: React.FC = () => {
   const { providers, referrals, commissionLedger, addProvider, recordClientPayment } = useData();
@@ -94,14 +98,14 @@ export const AdminClientManager: React.FC = () => {
   // Pre-loaded verified partner MoU agreements showcasing the % of MRP referral model
   const sampleMous = [
     {
-      id: 'mou_dhanvika',
+      id: 'mou_diagnostics',
       badge: 'Diagnostics & Labs (40% MRP Agreement)',
-      title: 'Dhanvika Diagnostics & Healthcare Labs MoU',
-      fileName: 'MoU_Dhanvika_Diagnostics_sBLOOM_2026.pdf',
-      businessName: 'Dhanvika Diagnostics & Healthcare Labs',
+      title: 'Metro Diagnostics & Healthcare Labs MoU',
+      fileName: 'MoU_Metro_Diagnostics_Agreement_2026.pdf',
+      businessName: 'Metro Diagnostics & Healthcare Labs',
       tagline: 'NABH Certified Advanced Pathology & Health Screening',
-      contactPerson: 'Dr. Harish Reddy',
-      email: 'harish.reddy@dhanvikadiagnostics.com',
+      contactPerson: 'Dr. S. K. Sharma',
+      email: 'contact@metrodiagnostics.in',
       phone: '+91 94401 22880',
       city: 'Hyderabad',
       address: 'Road No. 36, Jubilee Hills & Banjara Hills',
@@ -109,9 +113,9 @@ export const AdminClientManager: React.FC = () => {
       serviceOffering: 'Comprehensive Master Health Checkup',
       customerPrice: '2000', // MRP
       mouCommissionPercent: '40', // Client gives 40% of MRP price
-      feePerConv: '800', // 40% of ₹2,000 (Split: 20% affiliate / 20% sBLOOM)
+      feePerConv: '800', // 40% of ₹2,000 (Split: 20% affiliate / 20% platform)
       feePerLead: '200', // Lead verification milestone
-      description: 'B2B diagnostic referral partnership agreement executed under sBLOOM vetted network at 40% MRP referral fee (20% affiliate / 20% platform).'
+      description: 'B2B diagnostic referral partnership agreement executed at 40% MRP referral fee (20% affiliate / 20% platform).'
     },
     {
       id: 'mou_apex',
@@ -199,52 +203,54 @@ export const AdminClientManager: React.FC = () => {
     setIsScanningMou(true);
     setExtractedSuccess(false);
 
-    const cleanBaseName = file.name
-      .replace(/\.[^/.]+$/, '')
-      .replace(/[_-]+/g, ' ')
-      .replace(/mou|agreement|signed|contract/gi, '')
-      .trim();
-    const cleanBizName = cleanBaseName
-      ? cleanBaseName.charAt(0).toUpperCase() + cleanBaseName.slice(1)
-      : 'Dhanvika Diagnostics & Healthcare Labs';
-    const emailPrefix = cleanBizName.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-    setScanStepText(`Uploading document "${file.name}"...`);
+    setScanStepText(`Uploading document "${file.name}" to secure storage...`);
 
     // Perform real storage upload to Supabase bucket
-    const uploadRes = await uploadMouDocument(file, cleanBizName);
+    const cleanDocName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]+/g, ' ').trim();
+    const uploadRes = await uploadMouDocument(file, cleanDocName);
     if (uploadRes.success && uploadRes.filePath) {
       setMouStoragePath(uploadRes.filePath);
       setMouStorageUrl(uploadRes.fileUrl || uploadRes.filePath);
     }
 
-    setScanStepText(`Parsing agreement & extracting legal clauses...`);
-    setTimeout(() => {
-      setScanStepText(`Detecting signatory authority & corporate credentials from agreement...`);
-      setTimeout(() => {
-        setScanStepText(`Extracting agreed referral commission rate: 40% of MRP price...`);
-        setTimeout(() => {
-          setBizName(cleanBizName.includes(' ') ? cleanBizName : `${cleanBizName} Enterprises`);
-          setTagline('Commercial Service Provider (Verified via Signed MoU)');
-          setContactPerson('Dr. Harish Reddy / Authorized Signatory');
-          setEmail(`partners@${emailPrefix || 'enterprise'}.com`);
-          setPhone('+91 94401 22880');
-          setCity('Hyderabad');
-          setAddress('Road No. 36, Jubilee Hills Commercial Center');
-          setServiceAreas('Hyderabad, Secunderabad');
-          setMouCommissionPercent('40');
-          setDescription('Partner onboarded through verified bilateral commercial agreement / signed MoU at 40% MRP referral fee (20% affiliate / 20% platform).');
-          setProvPassword('Partner@2026');
+    setScanStepText(`Parsing agreement text & extracting client email from "${file.name}"...`);
 
-          setIsScanningMou(false);
-          setExtractedSuccess(true);
-          showNotification(
-            `MoU document uploaded successfully & partner details parsed!`,
-            'success'
-          );
-        }, 350);
-      }, 350);
-    }, 450);
+    try {
+      const rawText = await extractRawTextFromMouFile(file, (msg) => setScanStepText(msg));
+      const details = parseMouDetails(rawText, file.name);
+
+      setBizName(details.businessName || cleanDocName);
+      setTagline(details.tagline);
+      setContactPerson(details.contactPerson || '');
+      setEmail(details.email || '');
+      setPhone(details.phone || '');
+      setCity(details.city || 'Hyderabad');
+      setAddress(details.address || `${details.city || 'Hyderabad'} Commercial Hub`);
+      setServiceAreas(details.serviceAreas || `${details.city || 'Hyderabad'}, Pan-City`);
+      setMouCommissionPercent(details.commissionPercent || '40');
+      setDescription(details.description);
+      setProvPassword('Partner@2026');
+
+      setIsScanningMou(false);
+      setExtractedSuccess(true);
+
+      if (details.hasExtractedEmail) {
+        showNotification(
+          `Extracted client email "${details.email}" and partner terms from MoU!`,
+          'success'
+        );
+      } else {
+        showNotification(
+          `MoU text parsed! Please enter the client's official email address below.`,
+          'info'
+        );
+      }
+    } catch (parseErr) {
+      console.warn('MoU parse error:', parseErr);
+      setIsScanningMou(false);
+      setExtractedSuccess(true);
+      showNotification('MoU uploaded. Please review and enter client details.', 'info');
+    }
   };
 
   // Calculations across all clients
@@ -279,19 +285,30 @@ export const AdminClientManager: React.FC = () => {
 
   const handleAddClientSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!bizName.trim() || !contactPerson.trim()) return;
+    if (!bizName.trim()) {
+      showNotification('Client legal business name is required.', 'warning');
+      return;
+    }
+    if (!contactPerson.trim()) {
+      showNotification('Authorized signatory / contact person is required.', 'warning');
+      return;
+    }
+    if (!email.trim()) {
+      showNotification('Official client login email from the MoU is required.', 'warning');
+      return;
+    }
 
-    const provUserEmail = (email.trim() || `${bizName.toLowerCase().replace(/\s+/g, '')}@partner.com`).toLowerCase();
+    const provUserEmail = email.trim().toLowerCase();
     const assignedPassword = provPassword.trim() || 'Partner@2026';
     const pct = parseFloat(mouCommissionPercent) || 40;
 
-    // 1. Add the new client business
+    // 1. Add the new client business with the exact email from the MoU
     const newProv = addProvider({
       userId: `usr_prov_${Date.now()}`,
       businessName: bizName.trim(),
       tagline: tagline.trim() || 'Client Partner Business',
       contactPerson: contactPerson.trim(),
-      email: email.trim() || `${bizName.toLowerCase().replace(/\s+/g, '')}@partner.com`,
+      email: provUserEmail,
       phone: phone.trim() || '+91 98888 77665',
       address: address.trim() || `${city} Commercial Center`,
       city: city.trim(),
@@ -316,7 +333,7 @@ export const AdminClientManager: React.FC = () => {
       });
     }
 
-    // 2. Register Provider user account with credentials using email ID
+    // 2. Register Provider user account with credentials using the exact MoU email ID
     const provUser = {
       id: newProv.userId,
       name: contactPerson.trim(),
@@ -339,7 +356,7 @@ export const AdminClientManager: React.FC = () => {
       mouCommissionPercent: pct
     });
 
-    showNotification(`New client "${newProv.businessName}" onboarded successfully! Credentials generated.`, 'success');
+    showNotification(`New client "${newProv.businessName}" onboarded with official email "${provUserEmail}"!`, 'success');
     setShowAddClientModal(false);
 
     // Reset fields
@@ -591,7 +608,7 @@ export const AdminClientManager: React.FC = () => {
                             setHandoverCard({
                               businessName: provider.businessName,
                               contactPerson: provider.contactPerson,
-                              email: provUser?.email || `${provider.businessName.toLowerCase().replace(/\s+/g, '')}@partner.com`,
+                              email: provUser?.email || provider.email || '',
                               password: 'Partner@2026',
                               providerId: provider.id,
                               phone: provider.phone
@@ -771,8 +788,8 @@ export const AdminClientManager: React.FC = () => {
                         style={{
                           marginTop: '12px',
                           padding: '12px 16px',
-                          backgroundColor: '#DCFCE7',
-                          border: '1px solid #86EFAC',
+                          backgroundColor: email ? '#DCFCE7' : '#FEF3C7',
+                          border: email ? '1px solid #86EFAC' : '1px solid #FCD34D',
                           borderRadius: '8px',
                           display: 'flex',
                           flexDirection: 'column',
@@ -780,9 +797,11 @@ export const AdminClientManager: React.FC = () => {
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <CheckCircle2 size={18} color="#16A34A" />
-                          <span style={{ fontSize: '0.82rem', color: '#166534', fontWeight: 600 }}>
-                            ✓ Signed MoU extracted: Company, signatory, login email credentials & rates loaded below!
+                          <CheckCircle2 size={18} color={email ? '#16A34A' : '#D97706'} />
+                          <span style={{ fontSize: '0.82rem', color: email ? '#166534' : '#92400E', fontWeight: 600 }}>
+                            {email
+                              ? `✓ Client official email "${email}" extracted from MoU! Credentials mapped for provider.`
+                              : `⚠️ MoU text parsed. No email detected in document — please verify and enter the client's official email below.`}
                           </span>
                         </div>
                       </div>
@@ -887,7 +906,11 @@ export const AdminClientManager: React.FC = () => {
                   <div className="form-group">
                     <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ fontWeight: 700, color: 'var(--brand-cobalt)' }}>Official Login Email ID (Username) *</span>
-                      <span style={{ fontSize: '0.72rem', color: 'var(--brand-cobalt)', fontWeight: 600 }}>Provider Credentials</span>
+                      {email ? (
+                        <span style={{ fontSize: '0.72rem', color: '#16A34A', fontWeight: 600 }}>✓ Extracted from MoU</span>
+                      ) : (
+                        <span style={{ fontSize: '0.72rem', color: '#D97706', fontWeight: 600 }}>Required</span>
+                      )}
                     </label>
                     <input
                       type="email"
