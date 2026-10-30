@@ -95,104 +95,7 @@ export const AdminClientManager: React.FC = () => {
   // Only the Provider adds their specific services & retail prices in their own portal!
   const [mouCommissionPercent, setMouCommissionPercent] = useState('40'); // Client gives agreed % of MRP across their services
 
-  // Pre-loaded verified partner MoU agreements showcasing the % of MRP referral model
-  const sampleMous = [
-    {
-      id: 'mou_diagnostics',
-      badge: 'Diagnostics & Labs (40% MRP Agreement)',
-      title: 'Metro Diagnostics & Healthcare Labs MoU',
-      fileName: 'MoU_Metro_Diagnostics_Agreement_2026.pdf',
-      businessName: 'Metro Diagnostics & Healthcare Labs',
-      tagline: 'NABH Certified Advanced Pathology & Health Screening',
-      contactPerson: 'Dr. S. K. Sharma',
-      email: 'contact@metrodiagnostics.in',
-      phone: '+91 94401 22880',
-      city: 'Hyderabad',
-      address: 'Road No. 36, Jubilee Hills & Banjara Hills',
-      serviceAreas: 'Hyderabad, Secunderabad, Cyberabad',
-      serviceOffering: 'Comprehensive Master Health Checkup',
-      customerPrice: '2000', // MRP
-      mouCommissionPercent: '40', // Client gives 40% of MRP price
-      feePerConv: '800', // 40% of ₹2,000 (Split: 20% affiliate / 20% platform)
-      feePerLead: '200', // Lead verification milestone
-      description: 'B2B diagnostic referral partnership agreement executed at 40% MRP referral fee (20% affiliate / 20% platform).'
-    },
-    {
-      id: 'mou_apex',
-      badge: 'Cloud & CyberSec (30% MRP Agreement)',
-      title: 'Apex Cloud Systems India MoU',
-      fileName: 'MoU_Apex_Cloud_Systems_sBLOOM_2026.pdf',
-      businessName: 'Apex Cloud Systems India Pvt Ltd',
-      tagline: 'Enterprise Cloud Security & ISO 27001 Compliance Audits',
-      contactPerson: 'Deepak Rao',
-      email: 'deepak.rao@apexcloud.io',
-      phone: '+91 98111 22334',
-      city: 'Bangalore',
-      address: 'Outer Ring Road, Bellandur Tech Corridor',
-      serviceAreas: 'Bangalore, Hyderabad, Pan-India',
-      serviceOffering: 'Cloud Infrastructure & SOC2 Security Audit',
-      customerPrice: '20000', // MRP
-      mouCommissionPercent: '30', // Client gives 30% of MRP price
-      feePerConv: '6000', // 30% of ₹20,000 (Split: 15% affiliate / 15% sBLOOM)
-      feePerLead: '1000',
-      description: 'Corporate cybersecurity consulting & B2B infrastructure referral contract at 30% MRP (15% affiliate / 15% platform).'
-    },
-    {
-      id: 'mou_legal',
-      badge: 'Corporate Legal & GST (35% MRP Agreement)',
-      title: 'LexJuris Corporate Legal & Tax Advisors MoU',
-      fileName: 'MoU_LexJuris_Legal_sBLOOM_2026.pdf',
-      businessName: 'LexJuris Legal & Tax Associates',
-      tagline: 'Corporate Law, GST Advisory & Cross-Border Compliance',
-      contactPerson: 'Adv. Ananya Deshmukh',
-      email: 'ananya.deshmukh@lexjurislegal.com',
-      phone: '+91 98220 55667',
-      city: 'Mumbai',
-      address: 'Tower B, Nariman Point Financial District',
-      serviceAreas: 'Mumbai, Pune, Pan-India',
-      serviceOffering: 'Corporate Retainership & Tax Governance Suite',
-      customerPrice: '15000', // MRP
-      mouCommissionPercent: '35', // Client gives 35% of MRP price
-      feePerConv: '5250', // 35% of ₹15,000 (Split: 17.5% affiliate / 17.5% sBLOOM)
-      feePerLead: '700',
-      description: 'Corporate legal retained services and commercial referral MoU at 35% MRP (17.5% affiliate / 17.5% platform).'
-    }
-  ];
 
-  const handleSelectSampleMou = (sample: typeof sampleMous[0]) => {
-    setIsScanningMou(true);
-    setMouFileName(sample.fileName);
-    setMouDocRef(sample.fileName);
-    setExtractedSuccess(false);
-
-    setScanStepText('Analyzing MoU clauses, bilateral terms & service MRP price...');
-    setTimeout(() => {
-      setScanStepText(`Extracting legal entity "${sample.businessName}" & signatory "${sample.contactPerson}"...`);
-      setTimeout(() => {
-        setScanStepText(`Reading official login email "${sample.email}" & contact phone...`);
-        setTimeout(() => {
-          setScanStepText(`Extracting agreed MoU referral fee: ${sample.mouCommissionPercent}% of MRP (₹${sample.feePerConv} on MRP ₹${sample.customerPrice})...`);
-          setTimeout(() => {
-            setBizName(sample.businessName);
-            setTagline(sample.tagline);
-            setContactPerson(sample.contactPerson);
-            setEmail(sample.email);
-            setPhone(sample.phone);
-            setCity(sample.city);
-            setAddress(sample.address);
-            setServiceAreas(sample.serviceAreas);
-            setMouCommissionPercent(sample.mouCommissionPercent);
-            setDescription(sample.description);
-            setProvPassword('Partner@2026');
-
-            setIsScanningMou(false);
-            setExtractedSuccess(true);
-            showNotification(`Extracted partner details and ${sample.mouCommissionPercent}% MRP referral fee from "${sample.fileName}"!`, 'success');
-          }, 350);
-        }, 350);
-      }, 350);
-    }, 400);
-  };
 
   const handleMouFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -807,41 +710,8 @@ export const AdminClientManager: React.FC = () => {
                       </div>
                     )}
 
-                    {/* 3 Quick-Test Verified MoU Agreements */}
-                    <div style={{ marginTop: '16px' }}>
-                      <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '8px' }}>
-                        Or 1-Click Test With Pre-Loaded Executed MoUs:
-                      </span>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '8px' }}>
-                        {sampleMous.map((sample) => (
-                          <button
-                            key={sample.id}
-                            type="button"
-                            onClick={() => handleSelectSampleMou(sample)}
-                            style={{
-                              textAlign: 'left',
-                              padding: '10px 12px',
-                              backgroundColor: '#FFFFFF',
-                              border: mouDocRef === sample.fileName ? '1.5px solid var(--brand-cobalt)' : '1px solid var(--border-light)',
-                              borderRadius: '8px',
-                              cursor: 'pointer',
-                              boxShadow: mouDocRef === sample.fileName ? '0 0 0 2px rgba(37, 99, 235, 0.15)' : 'none',
-                              transition: 'all 0.15s ease'
-                            }}
-                          >
-                            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--brand-cobalt)', display: 'block' }}>
-                              {sample.badge}
-                            </span>
-                            <strong style={{ fontSize: '0.82rem', color: 'var(--brand-navy)', display: 'block', margin: '2px 0' }}>
-                              {sample.businessName}
-                            </strong>
-                            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>
-                              MRP ₹{sample.customerPrice} • {sample.mouCommissionPercent}% of MRP (₹{sample.feePerConv} fee)
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+
+
                   </div>
                 )}
 

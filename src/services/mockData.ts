@@ -12,6 +12,7 @@ import {
   Contact
 } from '../types';
 
+// Production: Only the admin user exists. All other data is real and created at runtime.
 export const ADMIN_USER: User = {
   id: 'usr_admin_01',
   name: 'Bhanu Bonu',
@@ -44,38 +45,8 @@ export const MOCK_AFFILIATE_PROFILE: AffiliateProfile = {
   }
 };
 
-export const MOCK_CATEGORIES: ServiceCategory[] = [
-  {
-    id: 'cat_health',
-    name: 'Healthcare & Diagnostics',
-    iconName: 'Activity',
-    description: 'Preventive health checkups, imaging scans, and clinical pathology packages',
-    activeOfferingsCount: 0
-  },
-  {
-    id: 'cat_corp',
-    name: 'Corporate & HR Services',
-    iconName: 'Briefcase',
-    description: 'Executive search, legal compliance, and workforce development',
-    activeOfferingsCount: 0
-  },
-  {
-    id: 'cat_it',
-    name: 'Cloud & IT Solutions',
-    iconName: 'Server',
-    description: 'Architecture consulting, infrastructure audits, and cybersecurity',
-    activeOfferingsCount: 0
-  },
-  {
-    id: 'cat_edu',
-    name: 'Professional Training',
-    iconName: 'GraduationCap',
-    description: 'Leadership workshops, technical certifications, and corporate training',
-    activeOfferingsCount: 0
-  }
-];
-
-// Production Clean Slate: Zero mock entities
+// Production Clean Slate: Zero mock entities — everything is created by admin/providers at runtime
+export const MOCK_CATEGORIES: ServiceCategory[] = [];
 export const MOCK_SERVICES: Service[] = [];
 export const MOCK_PROVIDERS: Provider[] = [];
 export const MOCK_OFFERINGS: ProviderOffering[] = [];
