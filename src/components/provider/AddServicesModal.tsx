@@ -18,6 +18,7 @@ import {
   Utensils
 } from 'lucide-react';
 import { uploadRateCardImage, syncOfferingToSupabase } from '../../services/supabaseClient';
+import { extractRawTextFromMouFile } from '../../services/mouParser';
 
 interface AddServicesModalProps {
   onClose: () => void;
@@ -114,52 +115,7 @@ Corporate Compliance & Legal Audit 25000`;
   const [manualEnableConv, setManualEnableConv] = useState(true);
   const [manualAffiliateConvReward, setManualAffiliateConvReward] = useState(isHealthcare ? '450' : isIT ? '2500' : '350');
 
-  // Dynamic sample rate cards filtered by provider industry
-  const sampleRateCards = isHealthcare
-    ? [
-        {
-          name: 'Diagnostic Clinical Rate Card (8 Essential Panels)',
-          image: 'https://images.unsplash.com/photo-1579154204601-01588f351e67?auto=format&fit=crop&w=600&q=80',
-          items: [
-            { id: 'hc_1', selected: true, title: 'Comprehensive Master Health Checkup (85+ Tests)', category: 'cat_health', price: 3999, affiliateLeadReward: 350, affiliateConvReward: 900, description: '85+ blood and clinical diagnostic parameters with physician consultation.' },
-            { id: 'hc_2', selected: true, title: 'Executive Cardiac & Diabetes Diagnostic Suite', category: 'cat_health', price: 6499, affiliateLeadReward: 500, affiliateConvReward: 1400, description: 'ECG, 2D Echo, Lipid Profile, HbA1c, and cardiologist tele-review.' },
-            { id: 'hc_3', selected: true, title: 'Diabetes Management Screening Suite', category: 'cat_health', price: 1899, affiliateLeadReward: 200, affiliateConvReward: 450, description: 'HbA1c, fasting glucose, microalbuminuria, and kidney function tests.' },
-            { id: 'hc_4', selected: true, title: 'Complete Blood Picture (CBP) + Lipid Profile', category: 'cat_health', price: 850, affiliateLeadReward: 100, affiliateConvReward: 200, description: 'Full automated hematology analyzer panel and cholesterol breakdown.' },
-            { id: 'hc_5', selected: true, title: 'Thyroid & Vitamin D3/B12 Vitality Panel', category: 'cat_health', price: 2199, affiliateLeadReward: 220, affiliateConvReward: 500, description: 'Total T3, T4, TSH plus essential deficiency screening markers.' }
-          ]
-        },
-        {
-          name: 'Preventive Health Checkup Packages',
-          image: 'https://images.unsplash.com/photo-1516549655169-df83a0774514?auto=format&fit=crop&w=600&q=80',
-          items: [
-            { id: 'hc_6', selected: true, title: 'Senior Citizen Comprehensive Screening', category: 'cat_health', price: 4499, affiliateLeadReward: 400, affiliateConvReward: 1000, description: 'Bone density, renal, liver, cardiac, and full geriatric diagnostic evaluation.' },
-            { id: 'hc_7', selected: true, title: 'Women Advanced Wellness & Hormone Profile', category: 'cat_health', price: 3499, affiliateLeadReward: 300, affiliateConvReward: 800, description: 'Thyroid, iron profile, reproductive hormone screen, and pelvic ultrasound.' }
-          ]
-        }
-      ]
-    : isIT
-    ? [
-        {
-          name: 'Cloud & Infrastructure Rate Card',
-          image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=600&q=80',
-          items: [
-            { id: 'it_1', selected: true, title: 'Cloud Architecture & Security Audit', category: 'cat_it', price: 25000, affiliateLeadReward: 1000, affiliateConvReward: 4000, description: 'End-to-end cloud infrastructure security and IAM policy verification.' },
-            { id: 'it_2', selected: true, title: 'AWS / Azure Infrastructure Cost Optimization', category: 'cat_it', price: 15000, affiliateLeadReward: 800, affiliateConvReward: 2500, description: 'Resource right-sizing, reserved instances, and waste reduction analysis.' }
-          ]
-        }
-      ]
-    : [
-        {
-          name: 'Corporate & Consulting Rate Sheet',
-          image: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?auto=format&fit=crop&w=600&q=80',
-          items: [
-            { id: 'cp_1', selected: true, title: 'Annual Corporate Employee Health Camp', category: 'cat_corp', price: 35000, affiliateLeadReward: 1000, affiliateConvReward: 4800, description: 'On-site mobile health screening camp for IT and corporate workplaces.' },
-            { id: 'cp_2', selected: true, title: 'Retained Executive Search & Recruitment', category: 'cat_corp', price: 75000, affiliateLeadReward: 1800, affiliateConvReward: 10500, description: 'Confidential executive search for VP and Director level corporate roles.' }
-          ]
-        }
-      ];
-
-  // Intelligent parser for OCR text or pasted service lines
+  // Intelligent parser for OCR text, PDF streams, or pasted service lines
   const parseOcrOrMenuText = (text: string, sourceName: string): ExtractedItem[] => {
     const combinedContext = `${text} ${sourceName} ${activeProvider.businessName}`.toLowerCase();
     const isDetectedHealth = /health|diag|blood|scan|test|checkup|clinic|cardiac|liver|kidney|ecg|echo|mri|xray|sugar|thyroid|urine/i.test(combinedContext);
@@ -202,70 +158,55 @@ Corporate Compliance & Legal Audit 25000`;
     return parsed;
   };
 
-  // Real OCR scanning on uploaded file
-  const performOcrScan = async (file: File) => {
-    setIsScanning(true);
-    setScanStatusMessage('Reading image with OCR Vision Engine...');
-
-    try {
-      const { createWorker } = await import('tesseract.js');
-      setScanStatusMessage('Scanning service names, deliverables & package prices...');
-      const worker = await createWorker('eng');
-      const ret = await worker.recognize(file);
-      await worker.terminate();
-
-      const ocrText = ret.data.text || '';
-      const items = parseOcrOrMenuText(ocrText, file.name);
-
-      if (items.length > 0) {
-        setExtractedItems(items);
-        showNotification(`Extracted ${items.length} services & prices from rate card!`, 'success');
-      } else {
-        const fallbackItems = parseOcrOrMenuText(file.name, file.name);
-        setExtractedItems(fallbackItems);
-        showNotification(`Extracted ${fallbackItems.length} services from rate card!`, 'success');
-      }
-    } catch (err) {
-      console.warn('OCR error, using smart fallback', err);
-      const fallbackItems = parseOcrOrMenuText(file.name, file.name);
-      setExtractedItems(fallbackItems);
-      showNotification(`Extracted ${fallbackItems.length} services from rate card!`, 'success');
-    } finally {
-      setIsScanning(false);
-    }
-  };
-
-  // Handle image upload from user's device/camera
-  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle rate card upload (Supports PDF documents, Scanned Photos, and Text Files)
+  const handleRateCardFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
+    if (!file) return;
+
+    const isImage = file.type.startsWith('image/') || file.name.match(/\.(png|jpe?g|webp)$/i);
+
+    // If image, preview real photo; if PDF/doc, show document thumbnail
+    if (isImage) {
       const reader = new FileReader();
       reader.onload = () => {
         setImagePreview(reader.result as string);
       };
       reader.readAsDataURL(file);
-
-      // Perform real storage upload
-      const uploadRes = await uploadRateCardImage(file, activeProvider.id);
-      if (uploadRes.success && uploadRes.filePath) {
-        setRateCardStoragePath(uploadRes.filePath);
-        setRateCardStorageUrl(uploadRes.fileUrl || uploadRes.filePath);
-        showNotification('Rate card photo uploaded successfully!', 'success');
-      }
-
-      performOcrScan(file);
+    } else {
+      setImagePreview('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="%230A2540"/><text x="50" y="45" font-size="11" fill="white" text-anchor="middle">RATE CARD</text><text x="50" y="62" font-size="9" fill="%2394A3B8" text-anchor="middle">DOCUMENT</text></svg>');
     }
-  };
 
-  const loadSampleRateCard = (sample: typeof sampleRateCards[0]) => {
-    setImagePreview(sample.image);
+    // Perform real storage upload to Supabase bucket
+    const uploadRes = await uploadRateCardImage(file, activeProvider.id);
+    if (uploadRes.success && uploadRes.filePath) {
+      setRateCardStoragePath(uploadRes.filePath);
+      setRateCardStorageUrl(uploadRes.fileUrl || uploadRes.filePath);
+    }
+
     setIsScanning(true);
-    setScanStatusMessage(`Loading verified services from ${sample.name}...`);
-    setTimeout(() => {
-      setExtractedItems(sample.items);
+    setScanStatusMessage(`Scanning "${file.name}" & extracting service offerings and prices...`);
+
+    try {
+      const rawText = await extractRawTextFromMouFile(file, (msg) => setScanStatusMessage(msg));
+      const items = parseOcrOrMenuText(rawText, file.name);
+
+      if (items.length > 0) {
+        setExtractedItems(items);
+        showNotification(`Extracted ${items.length} services & prices from your rate card!`, 'success');
+      } else {
+        setExtractedItems([]);
+        showNotification(
+          'No service prices could be automatically detected from this document. Please use Quick Text Paste or Manual Entry.',
+          'warning'
+        );
+      }
+    } catch (err) {
+      console.warn('Rate card parse error:', err);
+      setExtractedItems([]);
+      showNotification('Could not read file. Please use Quick Text Paste or Manual Entry.', 'warning');
+    } finally {
       setIsScanning(false);
-      showNotification(`Loaded ${sample.items.length} services from ${sample.name}!`, 'success');
-    }, 700);
+    }
   };
 
   // Parse quick pasted text rate card
@@ -343,7 +284,8 @@ Corporate Compliance & Legal Audit 25000`;
         customerPriceRupees: item.price,
         currency: 'INR',
         serviceArea: activeProvider.city || 'Pan-India',
-        rewardRules: rules
+        rewardRules: rules,
+        status: 'active'
       });
 
       // Synchronize to backend
@@ -399,7 +341,8 @@ Corporate Compliance & Legal Audit 25000`;
       customerPriceRupees: parseFloat(manualPrice) || 0,
       currency: 'INR',
       serviceArea: manualArea,
-      rewardRules: rules
+      rewardRules: rules,
+      status: 'active'
     });
 
     // Synchronize to backend
@@ -507,17 +450,17 @@ Corporate Compliance & Legal Audit 25000`;
                     <input
                       type="file"
                       id="rateCardInput"
-                      accept="image/*"
+                      accept=".pdf,.png,.jpg,.jpeg,.webp,.txt"
                       style={{ display: 'none' }}
-                      onChange={handleImageFileChange}
+                      onChange={handleRateCardFileChange}
                     />
                     <label htmlFor="rateCardInput" style={{ cursor: 'pointer', display: 'block' }}>
                       <Camera size={44} color="var(--brand-cobalt)" style={{ margin: '0 auto 12px' }} />
                       <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--brand-navy)', marginBottom: '6px' }}>
-                        Take a Picture or Upload Your Price List / Rate Sheet
+                        Upload or Snap Your Price List / Rate Sheet
                       </h3>
                       <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', maxWidth: '480px', margin: '0 auto 16px' }}>
-                        Upload any photo of your rate card, clinical test menu, service flyer, or price list. We will automatically extract all services and prices in seconds.
+                        Supports PDF tariff sheets, test menus, price list documents, or photo scans (PNG/JPG). All services and retail prices will be extracted automatically.
                       </p>
                       <button
                         type="button"
@@ -525,30 +468,9 @@ Corporate Compliance & Legal Audit 25000`;
                         onClick={() => document.getElementById('rateCardInput')?.click()}
                       >
                         <Upload size={16} />
-                        <span>Choose Photo or Document</span>
+                        <span>Choose PDF or Image Document</span>
                       </button>
                     </label>
-                  </div>
-
-                  {/* Instant Test Samples */}
-                  <div style={{ backgroundColor: 'var(--bg-surface-subtle)', padding: '16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
-                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--brand-navy)', display: 'block', marginBottom: '8px' }}>
-                      ⚡ Or test instantly with a preloaded rate card sample:
-                    </span>
-                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                      {sampleRateCards.map((sample, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          className="btn btn-outline btn-sm"
-                          onClick={() => loadSampleRateCard(sample)}
-                          style={{ backgroundColor: '#FFF' }}
-                        >
-                          <ImageIcon size={14} />
-                          <span>{sample.name}</span>
-                        </button>
-                      ))}
-                    </div>
                   </div>
                 </div>
               ) : (

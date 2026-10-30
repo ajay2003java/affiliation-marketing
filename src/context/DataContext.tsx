@@ -67,7 +67,7 @@ interface DataContextType {
   approveSettlementWithTds: (commissionId: string, panVerifiedOverride?: boolean) => void;
   executeInstantUpiPayout: (amount: number, upiVpa: string) => { success: boolean; utr: string; payout?: PayoutRecord };
   updateAffiliateTaxProfile: (panNumber: string, upiVpa: string) => void;
-  createOffering: (offering: Omit<ProviderOffering, 'id' | 'version' | 'createdAt' | 'updatedAt' | 'status'>) => ProviderOffering;
+  createOffering: (offering: Omit<ProviderOffering, 'id' | 'version' | 'createdAt' | 'updatedAt' | 'status'> & { status?: OfferingStatus }) => ProviderOffering;
   updateOffering: (offeringId: string, data: Partial<ProviderOffering>, createNewVersion?: boolean) => void;
   reviewOffering: (offeringId: string, decision: 'active' | 'rejected', feedback?: string) => void;
   updateAffiliateEarningModes: (modes: EarningMode) => void;
@@ -997,16 +997,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
-  // Create Provider Offering (Starts as pending_review)
+  // Create Provider Offering (Active by default for verified onboarded providers)
   const createOffering = (
-    offeringData: Omit<ProviderOffering, 'id' | 'version' | 'createdAt' | 'updatedAt' | 'status'>
+    offeringData: Omit<ProviderOffering, 'id' | 'version' | 'createdAt' | 'updatedAt' | 'status'> & { status?: OfferingStatus }
   ): ProviderOffering => {
     const now = new Date().toISOString();
     const newOffering: ProviderOffering = {
       ...offeringData,
-      id: `off_${Date.now()}`,
+      id: `off_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
       version: 1,
-      status: 'pending_review',
+      status: offeringData.status || 'active',
       createdAt: now,
       updatedAt: now
     };
@@ -1020,7 +1020,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       'CREATED_OFFERING',
       'offering',
       newOffering.id,
-      `Submitted offering "${newOffering.title}" for admin approval.`
+      `Published commercial service offering "${newOffering.title}".`
     );
 
     // Synchronize offering & reward rules to Supabase
