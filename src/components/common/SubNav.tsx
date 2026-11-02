@@ -109,11 +109,35 @@ export const SubNav: React.FC = () => {
             <>
               <button
                 id="tab-provider-home"
-                className={`sub-nav-tab active`}
+                className={`sub-nav-tab ${activeTab === 'provider_home' ? 'active' : ''}`}
                 onClick={() => setActiveTab('provider_home')}
               >
                 <Users size={15} />
-                <span>Leads & Services Overview</span>
+                <span>Leads & Referral Pipeline</span>
+              </button>
+              <button
+                id="tab-provider-offerings"
+                className={`sub-nav-tab ${activeTab === 'provider_offerings' ? 'active' : ''}`}
+                onClick={() => setActiveTab('provider_offerings')}
+              >
+                <Tag size={15} />
+                <span>My Services & Rate Card</span>
+              </button>
+              <button
+                id="tab-provider-agreement"
+                className={`sub-nav-tab ${activeTab === 'provider_agreement' ? 'active' : ''}`}
+                onClick={() => setActiveTab('provider_agreement')}
+              >
+                <FileText size={15} />
+                <span>Partnership Agreement</span>
+              </button>
+              <button
+                id="tab-provider-profile"
+                className={`sub-nav-tab ${activeTab === 'provider_profile' ? 'active' : ''}`}
+                onClick={() => setActiveTab('provider_profile')}
+              >
+                <UserCheck size={15} />
+                <span>Business Profile & Password</span>
               </button>
             </>
           )}

@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { useApp } from '../../context/AppContext';
-import { Building2, ShieldCheck, Check, Edit2, Save, X } from 'lucide-react';
+import { Building2, ShieldCheck, Check, Edit2, Save, X, Key, Lock, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Provider } from '../../types';
 
 export const ProviderProfile: React.FC = () => {
   const { providers, updateProvider } = useData();
-  const { activeProviderId, showNotification } = useApp();
+  const { activeProviderId, showNotification, changeUserPassword, currentUser } = useApp();
 
   const provider: Provider = providers.find((p) => p.id === activeProviderId) || providers[0];
 
@@ -20,6 +20,13 @@ export const ProviderProfile: React.FC = () => {
   const [email, setEmail] = useState(provider.email);
   const [serviceAreasInput, setServiceAreasInput] = useState(provider.serviceAreas.join(', '));
   const [description, setDescription] = useState(provider.description);
+
+  // Password management state
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
 
   // Sync state if active provider switches
   React.useEffect(() => {
@@ -52,6 +59,35 @@ export const ProviderProfile: React.FC = () => {
 
     showNotification(`Profile updated for ${bizName}!`, 'success');
     setIsEditing(false);
+  };
+
+  const handleChangePassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(false);
+
+    if (newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters long.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match. Please re-enter.');
+      return;
+    }
+
+    const res = changeUserPassword(newPassword);
+    if (res.success) {
+      setPasswordSuccess(true);
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => {
+        setPasswordSuccess(false);
+        setShowPasswordForm(false);
+      }, 3500);
+    } else {
+      setPasswordError(res.error || 'Failed to update password.');
+    }
   };
 
   return (
@@ -251,6 +287,119 @@ export const ProviderProfile: React.FC = () => {
           </div>
         </form>
       )}
+
+      {/* Account Security & Password Management Card */}
+      <div className="card" style={{ padding: '24px 28px', marginTop: '24px', border: '1px solid #E2E8F0', borderRadius: '12px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: showPasswordForm ? '16px' : '0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '42px', height: '42px', borderRadius: '8px', backgroundColor: 'rgba(37, 99, 235, 0.1)', color: 'var(--brand-cobalt)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Key size={22} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--brand-navy)', margin: 0 }}>
+                Account Security & Portal Password
+              </h3>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '2px 0 0 0' }}>
+                Login Email: <strong>{provider.email || currentUser.email}</strong> • Role: Verified Client Provider
+              </p>
+            </div>
+          </div>
+
+          {!showPasswordForm ? (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => {
+                setShowPasswordForm(true);
+                setPasswordError(null);
+                setPasswordSuccess(false);
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}
+            >
+              <Lock size={14} />
+              <span>Change Portal Password</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                setShowPasswordForm(false);
+                setPasswordError(null);
+                setNewPassword('');
+                setConfirmPassword('');
+              }}
+            >
+              <X size={14} />
+              <span>Close</span>
+            </button>
+          )}
+        </div>
+
+        {showPasswordForm && (
+          <form onSubmit={handleChangePassword} style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-light)' }}>
+            <div style={{ maxWidth: '480px' }}>
+              {passwordError && (
+                <div className="notice-box error" style={{ padding: '8px 12px', fontSize: '0.82rem', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <AlertCircle size={15} />
+                  <span>{passwordError}</span>
+                </div>
+              )}
+
+              {passwordSuccess && (
+                <div className="notice-box success" style={{ padding: '8px 12px', fontSize: '0.82rem', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <CheckCircle2 size={15} />
+                  <span>Password updated successfully! Your account is now secured with your new password.</span>
+                </div>
+              )}
+
+              <div className="form-group" style={{ marginBottom: '12px' }}>
+                <label className="form-label" style={{ fontSize: '0.82rem' }}>
+                  New Password <span className="required">*</span>
+                </label>
+                <input
+                  type="password"
+                  className="form-input"
+                  placeholder="Enter new password (min. 6 characters)"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  minLength={6}
+                  required
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '16px' }}>
+                <label className="form-label" style={{ fontSize: '0.82rem' }}>
+                  Confirm New Password <span className="required">*</span>
+                </label>
+                <input
+                  type="password"
+                  className="form-input"
+                  placeholder="Re-enter new password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  minLength={6}
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button type="submit" className="btn btn-primary btn-sm" style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <ShieldCheck size={15} />
+                  <span>Save New Password</span>
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setShowPasswordForm(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </form>
+        )}
+      </div>
     </div>
   );
 };

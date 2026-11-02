@@ -23,6 +23,7 @@ export interface User {
   avatarUrl?: string;
   phone?: string;
   providerId?: string; // Binds provider users to their specific business tenant
+  password?: string;
 }
 
 export interface CallLogEntry {

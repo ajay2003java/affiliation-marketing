@@ -17,6 +17,7 @@ interface AppContextType {
   registerAffiliate: (data: { name: string; email: string; phone: string; occupation?: string; city?: string }) => { success: boolean; error?: string };
   registerProviderByAdmin: (user: User, providerId: string, tempPassword?: string) => void;
   registerProviderUser: (user: User, providerId: string) => void;
+  changeUserPassword: (newPassword: string) => { success: boolean; error?: string };
   logout: () => void;
   switchRole: (role: UserRole) => void;
   activeTab: string;
@@ -136,6 +137,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (p) => p.email.toLowerCase() === cleanEmail
     );
     if (foundSavedProvider) {
+      if (foundSavedProvider.password && foundSavedProvider.password !== password) {
+        return { success: false, error: 'Incorrect password for provider account. Please verify your password.' };
+      }
       setCurrentUser(foundSavedProvider);
       setActiveProviderId(foundSavedProvider.providerId || '');
       setCurrentRole('provider');
@@ -288,7 +292,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const provUser: User = {
       ...user,
       role: 'provider',
-      providerId
+      providerId,
+      password: tempPassword
     };
 
     const updatedProviders = [
@@ -306,6 +311,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       `Provider credentials saved for ${provUser.name} (${provUser.email}). Provider can now log in using password: ${tempPassword}`,
       'info'
     );
+  };
+
+  // User changes their password from business profile settings
+  const changeUserPassword = (newPassword: string): { success: boolean; error?: string } => {
+    if (!newPassword || newPassword.trim().length < 6) {
+      return { success: false, error: 'New password must be at least 6 characters long.' };
+    }
+
+    const trimmedPassword = newPassword.trim();
+    const updatedUser: User = { ...currentUser, password: trimmedPassword };
+    setCurrentUser(updatedUser);
+
+    if (currentRole === 'provider') {
+      const updatedProviders = savedProviderUsers.map((p) =>
+        p.email.toLowerCase() === currentUser.email.toLowerCase()
+          ? { ...p, password: trimmedPassword }
+          : p
+      );
+      if (!updatedProviders.some((p) => p.email.toLowerCase() === currentUser.email.toLowerCase())) {
+        updatedProviders.push(updatedUser);
+      }
+      setSavedProviderUsers(updatedProviders);
+      try {
+        localStorage.setItem(SAVED_PROVIDERS_KEY, JSON.stringify(updatedProviders));
+      } catch {
+        // ignore
+      }
+    } else if (currentRole === 'affiliate') {
+      const updatedAffiliates = savedAffiliateUsers.map((a) =>
+        a.email.toLowerCase() === currentUser.email.toLowerCase()
+          ? { ...a, password: trimmedPassword }
+          : a
+      );
+      setSavedAffiliateUsers(updatedAffiliates);
+      try {
+        localStorage.setItem(SAVED_AFFILIATES_KEY, JSON.stringify(updatedAffiliates));
+      } catch {
+        // ignore
+      }
+    }
+
+    showNotification('Password updated successfully! Keep your new password safe.', 'success');
+    return { success: true };
   };
 
   // Register a new provider business and sign them directly in (kept for direct flows)
@@ -352,6 +400,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         registerAffiliate,
         registerProviderByAdmin,
         registerProviderUser,
+        changeUserPassword,
         logout,
         switchRole,
         activeTab,

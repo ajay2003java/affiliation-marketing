@@ -1201,49 +1201,43 @@ export const AdminClientManager: React.FC = () => {
                 </div>
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Portal Web Link:</span>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
-                    {window.location.origin}
-                  </span>
+                  <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Direct Provider Portal Link:</span>
+                  <a
+                    href={window.location.origin.includes('localhost') ? `${window.location.origin}/provider` : 'https://sbloom.ottobon.in/provider'}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ fontSize: '0.8rem', color: 'var(--brand-cobalt)', fontWeight: 600, textDecoration: 'underline' }}
+                  >
+                    {window.location.origin.includes('localhost') ? `${window.location.origin}/provider` : 'sbloom.ottobon.in/provider'}
+                  </a>
                 </div>
               </div>
 
-              {/* Commercial Split Summary */}
+              {/* Client Handover Instructions & WhatsApp Direct Action */}
               {(() => {
-                const pct = handoverCard.mouCommissionPercent || 40;
-                const halfPct = pct / 2;
-                const handoverMsg = `🏢 *sBLOOM (by Ottobon) - Provider Portal Access*\n\nHello ${handoverCard.contactPerson},\nYour business account for *${handoverCard.businessName}* has been officially activated on the sBLOOM Referral Marketplace under our executed MoU (${handoverCard.mouDocRef || 'Signed MoU'}).\n\n🌐 *Portal Link:* ${window.location.origin}\n📧 *Login Email:* ${handoverCard.email}\n🔑 *Temporary Password:* ${handoverCard.password}\n\n💼 *Agreed Commercial Terms (% of MRP Model):*\n• Referral Fee Client Gives Us: ${pct}% of MRP\n• 50/50 Revenue Split:\n  - Affiliate Reward: ${halfPct}% of MRP\n  - sBLOOM Platform Margin: ${halfPct}% of MRP\n\nPlease log in to your Provider Portal to add your service packages, prices, and upload your rate card!`;
+                const portalLink = window.location.origin.includes('localhost')
+                  ? `${window.location.origin}/provider`
+                  : 'https://sbloom.ottobon.in/provider';
+
+                const handoverMsg = `🏛️ *sBLOOM (by Ottobon) - Provider Portal Access*\n\nHello ${handoverCard.contactPerson},\nYour business account for *${handoverCard.businessName}* has been officially activated on the sBLOOM Referral Marketplace.\n\n🌐 *Portal Link:* ${portalLink}\n📧 *Login Email:* ${handoverCard.email}\n🔑 *Temporary Password:* ${handoverCard.password}\n\n📌 *Important Next Steps:*\n1. *Please log in to your Provider Portal and add your services & retail rate cards.*\n2. *For your account safety and security, please change your temporary password immediately.*\n3. *You can easily change your password in the "Business Profile & Password" settings tab.*`;
 
                 return (
                   <>
-                    <div style={{ backgroundColor: '#F8FAFC', border: '1px solid var(--border-light)', borderRadius: '8px', padding: '12px 14px', marginBottom: '16px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                        <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--brand-navy)', textTransform: 'uppercase' }}>
-                          MoU Commercial Terms (% of MRP Model)
-                        </span>
-                        <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '2px 8px', borderRadius: '10px', background: '#DCFCE7', color: '#15803D' }}>
-                          {pct}% of MRP Agreement
+                    <div style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '8px', padding: '12px 14px', marginBottom: '16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                        <ShieldCheck size={16} color="#16A34A" />
+                        <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#166534' }}>
+                          Client Onboarding & Direct Access Ready
                         </span>
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.4fr', gap: '8px', fontSize: '0.78rem', backgroundColor: '#FFFFFF', padding: '10px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
-                        <div>
-                          <span style={{ color: '#D97706', display: 'block', fontSize: '0.7rem' }}>Agreed Referral Rate:</span>
-                          <strong style={{ fontSize: '0.95rem', color: '#B45309' }}>{pct}% of MRP</strong>
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block' }}>Across all provider services</span>
-                        </div>
-                        <div>
-                          <span style={{ color: '#16A34A', display: 'block', fontSize: '0.7rem' }}>50/50 Revenue Split:</span>
-                          <span style={{ color: '#16A34A', fontWeight: 700, display: 'block' }}>
-                            👤 Affiliate: {halfPct}% of MRP
-                          </span>
-                          <span style={{ color: 'var(--brand-cobalt)', fontWeight: 600, display: 'block', fontSize: '0.74rem' }}>
-                            🏢 Platform: {halfPct}% of MRP
-                          </span>
-                        </div>
-                      </div>
-                      <p style={{ margin: '8px 0 0 0', fontSize: '0.73rem', color: '#64748B' }}>
-                        💡 <em>The provider can log in immediately to enter their test packages, services, and retail prices.</em>
+                      <p style={{ margin: '0 0 6px 0', fontSize: '0.78rem', color: '#15803D', lineHeight: 1.45 }}>
+                        Direct URL: <strong>sbloom.ottobon.in/provider</strong> (routes directly to Provider Login, bypassing affiliate landing page).
                       </p>
+                      <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '0.76rem', color: '#166534', lineHeight: 1.5 }}>
+                        <li>Instructs client to <strong>log in and add their service packages</strong>.</li>
+                        <li>Prompts client to <strong>change their password in Business Profile</strong> for safety.</li>
+                        <li>Commercial fee split details are omitted from the client message.</li>
+                      </ul>
                     </div>
 
                     {/* 1-Click Actions: Copy Handover, WhatsApp Direct Send, & Instant Login */}
