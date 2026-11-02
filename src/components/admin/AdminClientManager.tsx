@@ -186,7 +186,7 @@ export const AdminClientManager: React.FC = () => {
   const totalCollectedFromClients = clientBillingSummary.reduce((sum, c) => sum + c.amountPaid, 0);
   const totalOutstandingBalance = Math.max(0, totalOwedByAllClients - totalCollectedFromClients);
 
-  const handleAddClientSubmit = (e: React.FormEvent) => {
+  const handleAddClientSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!bizName.trim()) {
       showNotification('Client legal business name is required.', 'warning');
@@ -221,8 +221,8 @@ export const AdminClientManager: React.FC = () => {
       amountPaidRupees: 0
     });
 
-    // Sync Provider & Agreement to Supabase live DB
-    syncProviderToSupabase(newProv);
+    // 2. Sync Provider & Agreement to Supabase live DB
+    const syncRes = await syncProviderToSupabase(newProv);
 
     // If MoU file was uploaded, store in admin_mou_uploads table
     if (mouStoragePath || mouFileName) {
@@ -236,7 +236,7 @@ export const AdminClientManager: React.FC = () => {
       });
     }
 
-    // 2. Register Provider user account with credentials using the exact MoU email ID
+    // 3. Register Provider user account with credentials using the exact MoU email ID
     const provUser = {
       id: newProv.userId,
       name: contactPerson.trim(),
@@ -247,7 +247,7 @@ export const AdminClientManager: React.FC = () => {
     };
     registerProviderByAdmin(provUser, newProv.id, assignedPassword);
 
-    // 3. Set credentials handover card modal
+    // 4. Set credentials handover card modal
     setHandoverCard({
       businessName: newProv.businessName,
       contactPerson: newProv.contactPerson,
@@ -259,7 +259,14 @@ export const AdminClientManager: React.FC = () => {
       mouCommissionPercent: pct
     });
 
-    showNotification(`New client "${newProv.businessName}" onboarded with official email "${provUserEmail}"!`, 'success');
+    if (syncRes.success) {
+      showNotification(`New client "${newProv.businessName}" onboarded & synced to live Supabase DB!`, 'success');
+    } else {
+      showNotification(
+        `Client "${newProv.businessName}" onboarded to dashboard! (Supabase notice: run RLS SQL script in Supabase to enable cloud sync)`,
+        'info'
+      );
+    }
     setShowAddClientModal(false);
 
     // Reset fields

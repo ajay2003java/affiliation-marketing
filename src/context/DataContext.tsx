@@ -26,6 +26,7 @@ import {
 } from '../services/mockData';
 import {
   supabase,
+  toValidUuid,
   syncProviderToSupabase,
   syncOfferingToSupabase,
   syncReferralToSupabase,
@@ -1169,14 +1170,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Providers
   const addProvider = (data: Omit<Provider, 'id' | 'status' | 'activeAgreements'>): Provider => {
+    const provId = toValidUuid();
     const newProv: Provider = {
       ...data,
-      id: `prov_${Date.now()}`,
+      id: provId,
       status: 'active',
       activeAgreements: [
         {
-          id: `agr_${Date.now()}`,
-          providerId: `prov_${Date.now()}`,
+          id: toValidUuid(),
+          providerId: provId,
           title: `Standard Affiliate Partnership Charter (${data.businessName})`,
           documentRef: `MoU-ONBOARD-${Date.now().toString().slice(-4)}.pdf`,
           status: 'active',

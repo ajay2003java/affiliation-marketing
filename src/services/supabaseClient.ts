@@ -171,10 +171,15 @@ export async function recordAdminMouUpload(record: {
   }
 }
 
+export interface SupabaseSyncResult {
+  success: boolean;
+  error?: string;
+}
+
 /**
  * Insert or update a Provider and their Agreement in Supabase
  */
-export async function syncProviderToSupabase(provider: Provider): Promise<boolean> {
+export async function syncProviderToSupabase(provider: Provider): Promise<SupabaseSyncResult> {
   try {
     const validId = toValidUuid(provider.id);
     const { error: provErr } = await supabase
@@ -197,7 +202,7 @@ export async function syncProviderToSupabase(provider: Provider): Promise<boolea
 
     if (provErr) {
       console.warn('Supabase provider upsert error:', provErr.message);
-      return false;
+      return { success: false, error: provErr.message };
     }
 
     // Sync active agreement if present
@@ -218,10 +223,10 @@ export async function syncProviderToSupabase(provider: Provider): Promise<boolea
         }, { onConflict: 'id' });
     }
 
-    return true;
-  } catch (err) {
+    return { success: true };
+  } catch (err: any) {
     console.warn('Exception syncing provider to Supabase:', err);
-    return false;
+    return { success: false, error: err?.message || 'Unknown error' };
   }
 }
 
