@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { DataProvider } from './context/DataContext';
 import { Header } from './components/common/Header';
@@ -18,6 +18,7 @@ import { ProviderHome } from './components/provider/ProviderHome';
 import { OfferingManager } from './components/provider/OfferingManager';
 import { AgreementView } from './components/provider/AgreementView';
 import { ProviderProfile } from './components/provider/ProviderProfile';
+import { ProviderLogin } from './components/provider/ProviderLogin';
 
 // Admin views (Our Company: Full Governance, Clients, Taxonomy & Ledger)
 import { AdminClientManager } from './components/admin/AdminClientManager';
@@ -27,9 +28,43 @@ import { OfferingApproval } from './components/admin/OfferingApproval';
 import { OutcomeVerification } from './components/admin/OutcomeVerification';
 import { ServiceTaxonomyManager } from './components/admin/ServiceTaxonomyManager';
 import { AuditTrailView } from './components/admin/AuditTrailView';
+import { AdminLogin } from './components/admin/AdminLogin';
 
 // Public Landing Page & Unified Auth Gateway
 import { LandingPage } from './components/landing/LandingPage';
+
+const getRoute = (): 'provider' | 'admin' | 'affiliate' => {
+  if (typeof window === 'undefined') return 'affiliate';
+  const path = window.location.pathname.toLowerCase();
+  const search = window.location.search.toLowerCase();
+  const hash = window.location.hash.toLowerCase();
+
+  if (
+    path === '/provider' ||
+    path.startsWith('/provider/') ||
+    path === '/providers' ||
+    path.startsWith('/providers/') ||
+    path === '/partner' ||
+    path.startsWith('/partner/') ||
+    search.includes('view=provider') ||
+    search.includes('role=provider') ||
+    hash.startsWith('#provider')
+  ) {
+    return 'provider';
+  }
+
+  if (
+    path === '/admin' ||
+    path.startsWith('/admin/') ||
+    search.includes('view=admin') ||
+    search.includes('role=admin') ||
+    hash.startsWith('#admin')
+  ) {
+    return 'admin';
+  }
+
+  return 'affiliate';
+};
 
 const MainRouter: React.FC = () => {
   const { currentRole, activeTab } = useApp();
@@ -75,10 +110,77 @@ const MainRouter: React.FC = () => {
   );
 };
 
-const AppContent: React.FC = () => {
-  const { isAuthenticated } = useApp();
+const AppFooter: React.FC = () => (
+  <footer
+    style={{
+      borderTop: '1px solid var(--border-light)',
+      backgroundColor: 'var(--bg-surface)',
+      padding: '24px 16px',
+      textAlign: 'center',
+      fontSize: '0.8rem',
+      color: 'var(--text-muted)'
+    }}
+  >
+    <div style={{ maxWidth: '1320px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+      <span>
+        <strong>Ottobon Partner Network</strong> &bull; PRD v0.2 Specification & Commercial MoU
+      </span>
+      <span>
+        Multi-Tenant Isolation: Healthcare, Clinical Diagnostics, Cloud & IT, HR Staffing & All Partner Businesses
+      </span>
+    </div>
+  </footer>
+);
 
-  if (!isAuthenticated) {
+const AppContent: React.FC = () => {
+  const { isAuthenticated, currentRole } = useApp();
+  const [route, setRoute] = useState<'provider' | 'admin' | 'affiliate'>(getRoute);
+
+  useEffect(() => {
+    const handleUrlChange = () => {
+      setRoute(getRoute());
+    };
+    window.addEventListener('popstate', handleUrlChange);
+    return () => window.removeEventListener('popstate', handleUrlChange);
+  }, []);
+
+  // 1. PROVIDER ROUTE (/provider)
+  // Strictly requires authenticated provider. If logged in as admin or unauthenticated, show Provider Login!
+  if (route === 'provider') {
+    if (!isAuthenticated || currentRole !== 'provider') {
+      return <ProviderLogin />;
+    }
+
+    return (
+      <div className="app-container">
+        <Header />
+        <SubNav />
+        <MainRouter />
+        <AppFooter />
+      </div>
+    );
+  }
+
+  // 2. ADMIN ROUTE (/admin)
+  // Strictly requires authenticated admin staff.
+  if (route === 'admin') {
+    if (!isAuthenticated || currentRole !== 'admin') {
+      return <AdminLogin />;
+    }
+
+    return (
+      <div className="app-container">
+        <Header />
+        <SubNav />
+        <MainRouter />
+        <AppFooter />
+      </div>
+    );
+  }
+
+  // 3. AFFILIATE / ROOT ROUTE (/)
+  // If not authenticated as affiliate, show Public Landing Page
+  if (!isAuthenticated || currentRole !== 'affiliate') {
     return <LandingPage />;
   }
 
@@ -87,26 +189,7 @@ const AppContent: React.FC = () => {
       <Header />
       <SubNav />
       <MainRouter />
-
-      <footer
-        style={{
-          borderTop: '1px solid var(--border-light)',
-          backgroundColor: 'var(--bg-surface)',
-          padding: '24px 16px',
-          textAlign: 'center',
-          fontSize: '0.8rem',
-          color: 'var(--text-muted)'
-        }}
-      >
-        <div style={{ maxWidth: '1320px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-          <span>
-            <strong>Ottobon Partner Network</strong> • PRD v0.2 Specification & Commercial MoU
-          </span>
-          <span>
-            Multi-Tenant Isolation: Healthcare, Cloud & IT, HR Staffing, Corporate Services & All Partner Businesses
-          </span>
-        </div>
-      </footer>
+      <AppFooter />
     </div>
   );
 };

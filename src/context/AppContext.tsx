@@ -60,9 +60,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(savedSession ? savedSession.isAuthenticated : false);
-  const [currentRole, setCurrentRole] = useState<UserRole>(savedSession ? savedSession.currentRole : 'admin');
+  const [currentRole, setCurrentRole] = useState<UserRole>(savedSession ? savedSession.currentRole : 'affiliate');
   const [currentUser, setCurrentUser] = useState<User>(
-    savedSession?.currentUser || MOCK_USERS.admin
+    savedSession?.currentUser || {
+      id: 'usr_guest',
+      name: 'Guest User',
+      email: '',
+      role: 'affiliate',
+      phone: ''
+    }
   );
   const [activeProviderId, setActiveProviderId] = useState<string>(
     savedSession?.activeProviderId || ''
@@ -124,6 +130,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 1. Admin role check
     if (cleanEmail === MOCK_USERS.admin.email.toLowerCase() || cleanEmail === 'admin@ottobon.in' || cleanEmail === 'academy@ottobon.in') {
+      const trimmedPass = (password || '').trim();
+      if (trimmedPass !== 'Ottobon@Admin2026' && trimmedPass !== 'Partner@2026' && trimmedPass !== 'Admin@2026') {
+        return { success: false, error: 'Invalid admin credentials. Please enter the correct password.' };
+      }
       setCurrentUser(MOCK_USERS.admin);
       setCurrentRole('admin');
       setActiveTab('admin_clients');
@@ -133,11 +143,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     // 2. Provider accounts check (Registered Providers only)
-    const foundSavedProvider = savedProviderUsers.find(
+    let foundSavedProvider = savedProviderUsers.find(
       (p) => p.email.toLowerCase() === cleanEmail
     );
+
+    // Default onboarded provider fallback (Dhanvika Diagnostics)
+    if (!foundSavedProvider && cleanEmail === 'dhanvikadiagnostics@gmail.com') {
+      foundSavedProvider = {
+        id: 'usr_prov_dhanvika',
+        name: 'Kumar Chenagalla',
+        email: 'dhanvikadiagnostics@gmail.com',
+        role: 'provider',
+        phone: '+91 8885282637',
+        providerId: '44d57460-17b7-48f4-bedd-5ef8dc84078b',
+        password: 'Partner@2026'
+      };
+    }
+
     if (foundSavedProvider) {
-      if (foundSavedProvider.password && foundSavedProvider.password !== password) {
+      const expectedPassword = foundSavedProvider.password || 'Partner@2026';
+      if (password !== expectedPassword) {
         return { success: false, error: 'Incorrect password for provider account. Please verify your password.' };
       }
       setCurrentUser(foundSavedProvider);
@@ -204,12 +229,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 2. Role: Provider
     if (role === 'provider') {
-      const found = savedProviderUsers.find((p) => p.email.toLowerCase() === cleanEmail);
+      let found = savedProviderUsers.find((p) => p.email.toLowerCase() === cleanEmail);
+      if (!found && cleanEmail === 'dhanvikadiagnostics@gmail.com') {
+        found = {
+          id: 'usr_prov_dhanvika',
+          name: 'Kumar Chenagalla',
+          email: 'dhanvikadiagnostics@gmail.com',
+          role: 'provider',
+          phone: '+91 8885282637',
+          providerId: '44d57460-17b7-48f4-bedd-5ef8dc84078b',
+          password: 'Partner@2026'
+        };
+      }
+
       if (!found) {
         return {
           success: false,
           error: 'Provider account not registered. Please contact Admin or apply as a Provider.'
         };
+      }
+
+      const expectedPass = found.password || 'Partner@2026';
+      if (password && password !== expectedPass) {
+        return { success: false, error: 'Incorrect provider password. Please verify your password.' };
       }
 
       setCurrentUser(found);
@@ -227,6 +269,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return {
           success: false,
           error: 'Restricted Access: Public self-registration is disabled for Admin Operations. Only authorized Ottobon staff accounts (@ottobon.in) are permitted.'
+        };
+      }
+
+      const adminPass = (password || emailOrPass || '').trim();
+      if (adminPass !== 'Ottobon@Admin2026' && adminPass !== 'Admin@2026' && adminPass !== 'Partner@2026') {
+        return {
+          success: false,
+          error: 'Invalid admin credentials. Please enter the correct admin password.'
         };
       }
 
@@ -372,8 +422,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsAuthenticated(false);
     setCurrentRole('affiliate');
     setActiveTab('affiliate_dashboard');
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-    showNotification('Signed out successfully. Choose a role to log back in.', 'info');
+    setCurrentUser({
+      id: 'usr_guest',
+      name: 'Guest User',
+      email: '',
+      role: 'affiliate',
+      phone: ''
+    });
+    setActiveProviderId('');
+    try {
+      localStorage.removeItem(AUTH_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+    showNotification('Signed out successfully.', 'info');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }
   };
 
   // Switch role (only accessible in admin or explicit workflows)
@@ -381,10 +446,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentRole(role);
     if (role === 'affiliate') {
       setActiveTab('affiliate_dashboard');
+      if (typeof window !== 'undefined') {
+        window.history.pushState(null, '', '/');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
     } else if (role === 'provider') {
       setActiveTab('provider_home');
+      if (typeof window !== 'undefined') {
+        window.history.pushState(null, '', '/provider');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
     } else if (role === 'admin') {
       setActiveTab('admin_clients');
+      if (typeof window !== 'undefined') {
+        window.history.pushState(null, '', '/admin');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
     }
     showNotification(`Switched to ${role.toUpperCase()} workspace.`, 'info');
   };
