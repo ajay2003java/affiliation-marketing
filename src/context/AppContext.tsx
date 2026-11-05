@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { MOCK_USERS } from '../services/mockData';
+import { supabase } from '../services/supabaseClient';
 
 const AUTH_STORAGE_KEY = 'affiliate_auth_session_v2';
 const SAVED_PROVIDERS_KEY = 'registered_provider_users_v2';
@@ -102,17 +103,17 @@ export const detectPortal = (provided?: PortalContext): PortalContext => {
   return 'affiliate';
 };
 
-export const getAllKnownProviders = (savedProviders: User[]): User[] => {
+export const getAllKnownProviders = (savedProviders: User[], liveDbProviders: User[] = []): User[] => {
   const result: User[] = [...savedProviders];
 
-  // Merge built-in verified partner providers if not already customized
-  for (const vp of VERIFIED_PARTNER_PROVIDERS) {
-    if (!result.some((p) => p.providerId === vp.providerId || (p.email && p.email.toLowerCase() === vp.email.toLowerCase()))) {
-      result.push(vp);
+  // 1. Live database providers fetched directly from Supabase backend
+  for (const lp of liveDbProviders) {
+    if (!result.some((p) => p.providerId === lp.providerId || (lp.email && p.email.toLowerCase() === lp.email.toLowerCase()))) {
+      result.push(lp);
     }
   }
 
-  // Also merge any dynamically added providers from DataContext storage
+  // 2. Also merge any dynamically added providers from DataContext storage
   try {
     const rawDataProviders = localStorage.getItem('affiliate_platform_prod_v5_providers');
     if (rawDataProviders) {
@@ -136,6 +137,13 @@ export const getAllKnownProviders = (savedProviders: User[]): User[] => {
     }
   } catch {
     // ignore
+  }
+
+  // 3. Verified partner seed fallback (offline safety net)
+  for (const vp of VERIFIED_PARTNER_PROVIDERS) {
+    if (!result.some((p) => p.providerId === vp.providerId || (p.email && p.email.toLowerCase() === vp.email.toLowerCase()))) {
+      result.push(vp);
+    }
   }
 
   return result;
@@ -206,6 +214,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return [];
     }
   });
+
+  // Dynamic live providers fetched directly from Supabase backend database
+  const [liveDbProviders, setLiveDbProviders] = useState<User[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadLiveProvidersFromSupabase() {
+      try {
+        const { data, error } = await supabase.from('providers').select('*');
+        if (!error && data && data.length > 0 && isMounted) {
+          const mapped: User[] = data.map((dp: any) => ({
+            id: `usr_prov_${dp.id.slice(0, 8)}`,
+            name: `${dp.business_name}${dp.contact_person ? ` (${dp.contact_person})` : ''}`,
+            email: dp.email || '',
+            role: 'provider' as UserRole,
+            phone: dp.phone || '',
+            providerId: dp.id,
+            password: 'Partner@2026'
+          }));
+          setLiveDbProviders(mapped);
+        }
+      } catch {
+        // network or offline fallback
+      }
+    }
+    loadLiveProvidersFromSupabase();
+  }, []);
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(savedSession ? savedSession.isAuthenticated : false);
   const [currentRole, setCurrentRole] = useState<UserRole>(savedSession ? savedSession.currentRole : 'affiliate');
@@ -313,7 +348,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     // 2. Provider accounts check (Supports ALL verified partner providers + runtime providers)
-    const allKnownProviders = getAllKnownProviders(savedProviderUsers);
+    const allKnownProviders = getAllKnownProviders(savedProviderUsers, liveDbProviders);
     const foundProvider = allKnownProviders.find(
       (p) =>
         (p.email && p.email.toLowerCase() === cleanEmail) ||
@@ -475,7 +510,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           error: 'Provider accounts must sign in at the Provider Portal (sbloom.ottobon.in/provider).'
         };
       }
-      const allKnownProviders = getAllKnownProviders(savedProviderUsers);
+      const allKnownProviders = getAllKnownProviders(savedProviderUsers, liveDbProviders);
       const found = allKnownProviders.find(
         (p) =>
           (p.email && p.email.toLowerCase() === cleanEmail) ||
@@ -695,7 +730,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Admin explicitly logs in as a client/provider business to inspect their portal
   const loginAsProvider = (prov: { id: string; businessName: string; contactPerson?: string; email?: string; phone?: string }) => {
-    const allProviders = getAllKnownProviders(savedProviderUsers);
+    const allProviders = getAllKnownProviders(savedProviderUsers, liveDbProviders);
     const existing = allProviders.find((p) => p.providerId === prov.id);
     const provUser: User = existing || {
       id: `usr_prov_${prov.id.slice(0, 8)}`,
@@ -729,7 +764,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     } else if (role === 'provider') {
       if (currentUser.role !== 'provider') {
-        const allProviders = getAllKnownProviders(savedProviderUsers);
+        const allProviders = getAllKnownProviders(savedProviderUsers, liveDbProviders);
         const target = allProviders.find((p) => p.providerId === activeProviderId) || VERIFIED_PARTNER_PROVIDERS[0];
         setCurrentUser(target);
         setActiveProviderId(target.providerId || '');
