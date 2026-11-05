@@ -142,18 +142,14 @@ export const ProviderLandingPage: React.FC = () => {
               onClick={() => setShowLoginModal(true)}
               className="nav-btn-signin"
             >
-              Sign In
+              Log In
             </button>
 
             <button
-              onClick={() => {
-                setProvError(null);
-                setProvSubmitted(false);
-                setShowProviderModal(true);
-              }}
+              onClick={() => setShowLoginModal(true)}
               className="nav-btn-cta"
             >
-              <span>Grow Free</span>
+              <span>Log In</span>
               <ArrowRight size={13} />
             </button>
           </div>
@@ -185,14 +181,10 @@ export const ProviderLandingPage: React.FC = () => {
 
             <div className="hero-cta-group">
               <button
-                onClick={() => {
-                  setProvError(null);
-                  setProvSubmitted(false);
-                  setShowProviderModal(true);
-                }}
+                onClick={() => setShowLoginModal(true)}
                 className="hero-primary-btn"
               >
-                <span>Increase Your Revenue (Free)</span>
+                <span>Log In to Increase Your Revenue</span>
                 <ArrowRight size={16} />
               </button>
 
@@ -420,11 +412,7 @@ export const ProviderLandingPage: React.FC = () => {
             </p>
           </div>
           <button
-            onClick={() => {
-              setProvError(null);
-              setProvSubmitted(false);
-              setShowProviderModal(true);
-            }}
+            onClick={() => setShowLoginModal(true)}
             style={{
               padding: '12px 26px',
               fontSize: '0.94rem',
@@ -439,7 +427,7 @@ export const ProviderLandingPage: React.FC = () => {
               gap: '6px'
             }}
           >
-            <span>Increase Your Revenue (Free)</span>
+            <span>Log In to Increase Your Revenue</span>
             <ArrowRight size={15} />
           </button>
         </div>

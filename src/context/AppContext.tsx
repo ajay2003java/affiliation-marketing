@@ -175,10 +175,20 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Session initialization from localStorage with self-healing
+  // Purge legacy persistent auto-login cache from localStorage so landing pages are always shown first
+  try {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem('affiliate_auth_session_v2');
+    localStorage.removeItem('affiliate_auth_session_v1');
+    localStorage.removeItem('affiliate_platform_auth_session_v4');
+  } catch {
+    // ignore
+  }
+
+  // Session initialization from sessionStorage (tab-scoped ONLY, never persists across fresh browser visits)
   const savedSession = (() => {
     try {
-      const data = localStorage.getItem(AUTH_STORAGE_KEY);
+      const data = sessionStorage.getItem(AUTH_STORAGE_KEY);
       if (!data) return null;
       const parsed = JSON.parse(data);
       // Auto-heal stale sessions where role is provider but user was saved as Admin (Bhanu Bonu)
@@ -264,11 +274,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
   const [notification, setNotification] = useState<{ type: 'success' | 'info' | 'warning'; message: string } | null>(null);
 
-  // Sync session changes to localStorage
+  // Sync session changes to sessionStorage (tab-scoped only; no permanent cache)
   useEffect(() => {
     try {
       if (isAuthenticated) {
-        localStorage.setItem(
+        sessionStorage.setItem(
           AUTH_STORAGE_KEY,
           JSON.stringify({
             isAuthenticated,
@@ -279,8 +289,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           })
         );
       } else {
-        localStorage.removeItem(AUTH_STORAGE_KEY);
+        sessionStorage.removeItem(AUTH_STORAGE_KEY);
       }
+      // Guarantee localStorage remains completely clean of auth tokens
+      localStorage.removeItem(AUTH_STORAGE_KEY);
     } catch {
       // ignore storage quota issues
     }
@@ -621,7 +633,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
     setActiveProviderId('');
     try {
+      sessionStorage.removeItem(AUTH_STORAGE_KEY);
       localStorage.removeItem(AUTH_STORAGE_KEY);
+      localStorage.removeItem('affiliate_auth_session_v2');
+      localStorage.removeItem('affiliate_platform_auth_session_v4');
     } catch {
       // ignore
     }
