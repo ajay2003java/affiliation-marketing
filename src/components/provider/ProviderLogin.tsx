@@ -26,7 +26,7 @@ export const ProviderLogin: React.FC = () => {
 
     setLoading(true);
     try {
-      const res = login(cleanEmail, password);
+      const res = login(cleanEmail, password, undefined, undefined, 'provider');
       if (!res.success) {
         setError(res.error || 'Invalid credentials. Please verify your email and password.');
       } else {

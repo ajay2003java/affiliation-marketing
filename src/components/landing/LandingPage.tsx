@@ -151,7 +151,7 @@ export const LandingPage: React.FC = () => {
           setAuthError('Please enter your email.');
           return;
         }
-        const res = login(authEmail.trim(), authPassword.trim() || 'Partner@2026');
+        const res = login(authEmail.trim(), authPassword.trim() || 'Partner@2026', undefined, undefined, 'affiliate');
         if (!res.success) {
           setAuthError(res.error || 'Invalid credentials.');
         } else {

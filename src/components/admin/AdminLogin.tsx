@@ -26,7 +26,7 @@ export const AdminLogin: React.FC = () => {
 
     setLoading(true);
     try {
-      const res = login(cleanEmail, password);
+      const res = login(cleanEmail, password, undefined, undefined, 'admin');
       if (!res.success) {
         setError(res.error || 'Authentication failed. Please verify your admin credentials.');
       } else {
