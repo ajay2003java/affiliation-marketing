@@ -222,15 +222,14 @@ export const ProviderLogin: React.FC = () => {
                 Assigned in onboarding message
               </span>
             </div>
-            <div style={{ position: 'relative' }}>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <Lock
                 size={18}
                 style={{
                   position: 'absolute',
                   left: '12px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  color: '#64748B'
+                  color: '#94A3B8',
+                  pointerEvents: 'none'
                 }}
               />
               <input
@@ -242,11 +241,11 @@ export const ProviderLogin: React.FC = () => {
                 style={{
                   width: '100%',
                   backgroundColor: '#0F172A',
-                  border: '1px solid #334155',
+                  border: '1.5px solid #334155',
                   borderRadius: '8px',
-                  padding: '10px 38px 10px 38px',
+                  padding: '11px 44px 11px 38px',
                   color: '#FFFFFF',
-                  fontSize: '0.9rem',
+                  fontSize: '0.92rem',
                   outline: 'none',
                   boxSizing: 'border-box'
                 }}
@@ -254,19 +253,23 @@ export const ProviderLogin: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                title={showPassword ? 'Hide password' : 'Show password'}
                 style={{
                   position: 'absolute',
-                  right: '12px',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  color: '#64748B',
+                  right: '8px',
+                  background: showPassword ? 'rgba(251, 191, 36, 0.15)' : 'rgba(255, 255, 255, 0.08)',
+                  border: showPassword ? '1px solid #F59E0B' : '1px solid rgba(255, 255, 255, 0.15)',
+                  borderRadius: '6px',
                   cursor: 'pointer',
-                  padding: 0
+                  padding: '6px 8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.15s ease'
                 }}
               >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showPassword ? <EyeOff size={18} color="#FBBF24" /> : <Eye size={18} color="#94A3B8" />}
               </button>
             </div>
           </div>

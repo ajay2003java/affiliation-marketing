@@ -18,7 +18,9 @@ import {
   X,
   ChevronRight,
   TrendingUp,
-  AlertCircle
+  AlertCircle,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 export const LandingPage: React.FC = () => {
@@ -54,6 +56,7 @@ export const LandingPage: React.FC = () => {
   const [authEmail, setAuthEmail] = useState('');
   const [authPhone, setAuthPhone] = useState('');
   const [authPassword, setAuthPassword] = useState('');
+  const [showAuthPassword, setShowAuthPassword] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
 
@@ -1541,13 +1544,35 @@ export const LandingPage: React.FC = () => {
                   <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#44403C', marginBottom: '4px' }}>
                     Password
                   </label>
-                  <input
-                    type="password"
-                    value={authPassword}
-                    onChange={(e) => setAuthPassword(e.target.value)}
-                    placeholder="Enter password"
-                    style={{ width: '100%', padding: '10px 12px', border: '1.5px solid #D6D3D1', borderRadius: '8px', fontSize: '0.9rem', boxSizing: 'border-box' }}
-                  />
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input
+                      type={showAuthPassword ? 'text' : 'password'}
+                      value={authPassword}
+                      onChange={(e) => setAuthPassword(e.target.value)}
+                      placeholder="Enter password"
+                      style={{ width: '100%', padding: '10px 42px 10px 12px', border: '1.5px solid #D6D3D1', borderRadius: '8px', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAuthPassword(!showAuthPassword)}
+                      aria-label={showAuthPassword ? 'Hide password' : 'Show password'}
+                      title={showAuthPassword ? 'Hide password' : 'Show password'}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        background: 'none',
+                        border: 'none',
+                        color: showAuthPassword ? '#047857' : '#78716C',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      {showAuthPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                 </div>
               )}
 

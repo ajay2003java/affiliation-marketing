@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useData } from '../../context/DataContext';
 import { useApp } from '../../context/AppContext';
-import { Building2, ShieldCheck, Check, Edit2, Save, X, Key, Lock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Building2, ShieldCheck, Check, Edit2, Save, X, Key, Lock, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { Provider } from '../../types';
 
 export const ProviderProfile: React.FC = () => {
@@ -25,6 +25,8 @@ export const ProviderProfile: React.FC = () => {
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
 
@@ -357,30 +359,76 @@ export const ProviderProfile: React.FC = () => {
                 <label className="form-label" style={{ fontSize: '0.82rem' }}>
                   New Password <span className="required">*</span>
                 </label>
-                <input
-                  type="password"
-                  className="form-input"
-                  placeholder="Enter new password (min. 6 characters)"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  minLength={6}
-                  required
-                />
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    className="form-input"
+                    placeholder="Enter new password (min. 6 characters)"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    minLength={6}
+                    required
+                    style={{ width: '100%', paddingRight: '42px', boxSizing: 'border-box' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                    title={showNewPassword ? 'Hide password' : 'Show password'}
+                    style={{
+                      position: 'absolute',
+                      right: '8px',
+                      background: 'none',
+                      border: 'none',
+                      color: showNewPassword ? 'var(--brand-cobalt)' : '#64748B',
+                      cursor: 'pointer',
+                      padding: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
 
               <div className="form-group" style={{ marginBottom: '16px' }}>
                 <label className="form-label" style={{ fontSize: '0.82rem' }}>
                   Confirm New Password <span className="required">*</span>
                 </label>
-                <input
-                  type="password"
-                  className="form-input"
-                  placeholder="Re-enter new password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  minLength={6}
-                  required
-                />
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    className="form-input"
+                    placeholder="Re-enter new password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    minLength={6}
+                    required
+                    style={{ width: '100%', paddingRight: '42px', boxSizing: 'border-box' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                    title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                    style={{
+                      position: 'absolute',
+                      right: '8px',
+                      background: 'none',
+                      border: 'none',
+                      color: showConfirmPassword ? 'var(--brand-cobalt)' : '#64748B',
+                      cursor: 'pointer',
+                      padding: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
 
               <div style={{ display: 'flex', gap: '8px' }}>
