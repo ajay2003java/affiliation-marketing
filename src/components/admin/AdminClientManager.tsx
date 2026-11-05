@@ -44,7 +44,7 @@ import {
 
 export const AdminClientManager: React.FC = () => {
   const { providers, referrals, commissionLedger, addProvider, recordClientPayment } = useData();
-  const { showNotification, switchRole, setActiveProviderId, registerProviderByAdmin, savedProviderUsers } = useApp();
+  const { showNotification, switchRole, setActiveProviderId, registerProviderByAdmin, savedProviderUsers, loginAsProvider } = useApp();
 
   // Selected client to view detailed referrals & billing breakdown
   const [selectedClient, setSelectedClient] = useState<Provider | null>(null);
@@ -534,9 +534,7 @@ export const AdminClientManager: React.FC = () => {
                           className="btn btn-outline btn-sm"
                           style={{ padding: '4px 8px', fontSize: '0.74rem' }}
                           onClick={() => {
-                            setActiveProviderId(provider.id);
-                            switchRole('provider');
-                            showNotification(`Logged into private workspace for ${provider.businessName}`, 'info');
+                            loginAsProvider(provider);
                           }}
                           title="Open this client's isolated provider portal"
                         >
@@ -1305,10 +1303,14 @@ export const AdminClientManager: React.FC = () => {
                 className="btn btn-outline"
                 style={{ width: '100%', padding: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', color: 'var(--brand-cobalt)' }}
                 onClick={() => {
-                  setActiveProviderId(handoverCard.providerId);
-                  switchRole('provider');
+                  loginAsProvider({
+                    id: handoverCard.providerId,
+                    businessName: handoverCard.businessName,
+                    contactPerson: handoverCard.contactPerson,
+                    email: handoverCard.email,
+                    phone: handoverCard.phone
+                  });
                   setHandoverCard(null);
-                  showNotification(`Switched to Provider Portal for ${handoverCard.businessName}`, 'success');
                 }}
               >
                 <LogIn size={16} />

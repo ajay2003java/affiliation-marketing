@@ -53,12 +53,26 @@ export const Header: React.FC = () => {
           {/* User Profile, Sign Out & Demo Reset */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div className="user-profile-badge">
-              <div className="user-avatar">
-                {currentUser.name.charAt(0)}
+              <div
+                className="user-avatar"
+                style={{
+                  backgroundColor: currentRole === 'provider' ? '#047857' : currentRole === 'admin' ? '#1E293B' : '#B45309',
+                  color: '#FFFFFF'
+                }}
+              >
+                {currentUser.name ? currentUser.name.charAt(0) : 'U'}
               </div>
               <div className="user-info-text">
                 <span className="user-name">{currentUser.name}</span>
-                <span className="user-role-label">{currentRole.toUpperCase()}</span>
+                <span
+                  className="user-role-label"
+                  style={{
+                    color: currentRole === 'provider' ? '#059669' : currentRole === 'admin' ? '#3B82F6' : '#D97706',
+                    fontWeight: 700
+                  }}
+                >
+                  {currentRole === 'provider' ? 'PROVIDER PARTNER' : currentRole.toUpperCase()}
+                </span>
               </div>
             </div>
 

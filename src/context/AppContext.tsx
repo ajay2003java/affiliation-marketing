@@ -13,7 +13,8 @@ interface AppContextType {
   activeProviderId: string;
   setActiveProviderId: (id: string) => void;
   login: (roleOrEmail: UserRole | string, emailOrPass?: string, password?: string, providerId?: string) => { success: boolean; error?: string };
-  unifiedLogin: (email: string, password?: string) => { success: boolean; error?: string };
+  unifiedLogin: (emailOrPhone: string, password?: string) => { success: boolean; error?: string };
+  loginAsProvider: (prov: { id: string; businessName: string; contactPerson?: string; email?: string; phone?: string }) => void;
   registerAffiliate: (data: { name: string; email: string; phone: string; occupation?: string; city?: string }) => { success: boolean; error?: string };
   registerProviderByAdmin: (user: User, providerId: string, tempPassword?: string) => void;
   registerProviderUser: (user: User, providerId: string) => void;
@@ -31,11 +32,30 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Session initialization from localStorage
+  // Session initialization from localStorage with self-healing
   const savedSession = (() => {
     try {
       const data = localStorage.getItem(AUTH_STORAGE_KEY);
-      return data ? JSON.parse(data) : null;
+      if (!data) return null;
+      const parsed = JSON.parse(data);
+      // Auto-heal stale sessions where role is provider but user was saved as Admin (Bhanu Bonu)
+      if (
+        parsed?.currentRole === 'provider' &&
+        (parsed?.currentUser?.name?.toLowerCase().includes('bhanu') || parsed?.currentUser?.role === 'admin')
+      ) {
+        parsed.currentUser = {
+          id: 'usr_prov_dhanvika',
+          name: 'Dhanvika Diagnostics (Kumar Chenagalla)',
+          email: 'dhanvikadiagnostics@gmail.com',
+          role: 'provider',
+          phone: '+91 8885282637',
+          providerId: parsed.activeProviderId || '44d57460-17b7-48f4-bedd-5ef8dc84078b'
+        };
+        if (!parsed.activeProviderId) {
+          parsed.activeProviderId = '44d57460-17b7-48f4-bedd-5ef8dc84078b';
+        }
+      }
+      return parsed;
     } catch {
       return null;
     }
@@ -113,45 +133,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const clearNotification = () => setNotification(null);
 
   // Unified Intelligent Login: production-ready credential authentication & role routing
-  const unifiedLogin = (email: string, password?: string): { success: boolean; error?: string } => {
-    const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail) {
-      return { success: false, error: 'Please enter your account email address.' };
-    }
-
+  const unifiedLogin = (emailOrPhone: string, password?: string): { success: boolean; error?: string } => {
+    const rawInput = (emailOrPhone || '').trim();
+    const cleanEmail = rawInput.toLowerCase();
+    const cleanDigits = rawInput.replace(/\D/g, '');
+    const isPhone = cleanDigits.length >= 10 && !cleanEmail.includes('@');
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(cleanEmail)) {
-      return { success: false, error: 'Please enter a valid email address.' };
+
+    if (!rawInput) {
+      return { success: false, error: 'Please enter your registered email address or mobile number.' };
     }
 
-    if (!password || password.trim().length < 6) {
+    if (!isPhone && !emailRegex.test(cleanEmail)) {
+      return { success: false, error: 'Please enter a valid email address or 10-digit mobile number.' };
+    }
+
+    const trimmedPassword = (password || '').trim();
+    if (!trimmedPassword || trimmedPassword.length < 6) {
       return { success: false, error: 'Please enter a valid password (minimum 6 characters).' };
     }
 
     // 1. Admin role check
-    if (cleanEmail === MOCK_USERS.admin.email.toLowerCase() || cleanEmail === 'admin@ottobon.in' || cleanEmail === 'academy@ottobon.in') {
-      const trimmedPass = (password || '').trim();
-      if (trimmedPass !== 'Ottobon@Admin2026' && trimmedPass !== 'Partner@2026' && trimmedPass !== 'Admin@2026') {
+    if (!isPhone && (cleanEmail === MOCK_USERS.admin.email.toLowerCase() || cleanEmail === 'admin@ottobon.in' || cleanEmail === 'academy@ottobon.in')) {
+      if (trimmedPassword !== 'Ottobon@Admin2026' && trimmedPassword !== 'Partner@2026' && trimmedPassword !== 'Admin@2026') {
         return { success: false, error: 'Invalid admin credentials. Please enter the correct password.' };
       }
       setCurrentUser(MOCK_USERS.admin);
       setCurrentRole('admin');
       setActiveTab('admin_clients');
       setIsAuthenticated(true);
+      if (typeof window !== 'undefined') {
+        window.history.pushState(null, '', '/admin');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
       showNotification(`Welcome back, ${MOCK_USERS.admin.name}! Admin Operations Desk unlocked.`, 'success');
       return { success: true };
     }
 
     // 2. Provider accounts check (Registered Providers only)
     let foundSavedProvider = savedProviderUsers.find(
-      (p) => p.email.toLowerCase() === cleanEmail
+      (p) =>
+        (p.email && p.email.toLowerCase() === cleanEmail) ||
+        (cleanDigits.length >= 10 && (p.phone || '').replace(/\D/g, '').endsWith(cleanDigits.slice(-10)))
     );
 
     // Default onboarded provider fallback (Dhanvika Diagnostics)
-    if (!foundSavedProvider && cleanEmail === 'dhanvikadiagnostics@gmail.com') {
+    const isDhanvikaEmail = cleanEmail === 'dhanvikadiagnostics@gmail.com';
+    const isDhanvikaPhone = cleanDigits.endsWith('8885282637');
+    if (!foundSavedProvider && (isDhanvikaEmail || isDhanvikaPhone)) {
       foundSavedProvider = {
         id: 'usr_prov_dhanvika',
-        name: 'Kumar Chenagalla',
+        name: 'Dhanvika Diagnostics (Kumar Chenagalla)',
         email: 'dhanvikadiagnostics@gmail.com',
         role: 'provider',
         phone: '+91 8885282637',
@@ -161,8 +193,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (foundSavedProvider) {
-      const expectedPassword = foundSavedProvider.password || 'Partner@2026';
-      if (password !== expectedPassword) {
+      const expectedPassword = (foundSavedProvider.password || 'Partner@2026').trim();
+      if (trimmedPassword !== expectedPassword) {
         return { success: false, error: 'Incorrect password for provider account. Please verify your password.' };
       }
       setCurrentUser(foundSavedProvider);
@@ -170,19 +202,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCurrentRole('provider');
       setActiveTab('provider_home');
       setIsAuthenticated(true);
+      if (typeof window !== 'undefined') {
+        window.history.pushState(null, '', '/provider');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
       showNotification(`Signed in to Provider Portal (${foundSavedProvider.name}).`, 'success');
       return { success: true };
     }
 
     // 3. Affiliate accounts check (Self-Registered Affiliates only)
     const foundSavedAffiliate = savedAffiliateUsers.find(
-      (a) => a.email.toLowerCase() === cleanEmail
+      (a) =>
+        (a.email && a.email.toLowerCase() === cleanEmail) ||
+        (cleanDigits.length >= 10 && (a.phone || '').replace(/\D/g, '').endsWith(cleanDigits.slice(-10)))
     );
     if (foundSavedAffiliate) {
+      const expectedPassword = (foundSavedAffiliate.password || 'Partner@2026').trim();
+      if (foundSavedAffiliate.password && trimmedPassword !== expectedPassword) {
+        return { success: false, error: 'Incorrect password for affiliate account.' };
+      }
       setCurrentUser(foundSavedAffiliate);
       setCurrentRole('affiliate');
       setActiveTab('affiliate_dashboard');
       setIsAuthenticated(true);
+      if (typeof window !== 'undefined') {
+        window.history.pushState(null, '', '/');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
       showNotification(`Welcome back, ${foundSavedAffiliate.name}! Connected to Affiliate Workspace.`, 'success');
       return { success: true };
     }
@@ -207,11 +253,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const role = roleOrEmail as UserRole;
-    const cleanEmail = (emailOrPass || '').trim().toLowerCase();
+    const rawInput = (emailOrPass || '').trim();
+    const cleanEmail = rawInput.toLowerCase();
+    const cleanDigits = rawInput.replace(/\D/g, '');
+    const trimmedPass = (password || '').trim();
 
     // 1. Role: Affiliate
     if (role === 'affiliate') {
-      const found = savedAffiliateUsers.find((a) => a.email.toLowerCase() === cleanEmail);
+      const found = savedAffiliateUsers.find(
+        (a) =>
+          a.email.toLowerCase() === cleanEmail ||
+          (cleanDigits.length >= 10 && (a.phone || '').replace(/\D/g, '').endsWith(cleanDigits.slice(-10)))
+      );
       if (!found) {
         return {
           success: false,
@@ -223,17 +276,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCurrentRole('affiliate');
       setActiveTab('affiliate_dashboard');
       setIsAuthenticated(true);
+      if (typeof window !== 'undefined') {
+        window.history.pushState(null, '', '/');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
       showNotification(`Welcome back, ${found.name}! Connected to Affiliate Workspace.`, 'success');
       return { success: true };
     }
 
     // 2. Role: Provider
     if (role === 'provider') {
-      let found = savedProviderUsers.find((p) => p.email.toLowerCase() === cleanEmail);
-      if (!found && cleanEmail === 'dhanvikadiagnostics@gmail.com') {
+      let found = savedProviderUsers.find(
+        (p) =>
+          (p.email && p.email.toLowerCase() === cleanEmail) ||
+          (cleanDigits.length >= 10 && (p.phone || '').replace(/\D/g, '').endsWith(cleanDigits.slice(-10)))
+      );
+      if (!found && (cleanEmail === 'dhanvikadiagnostics@gmail.com' || cleanDigits.endsWith('8885282637'))) {
         found = {
           id: 'usr_prov_dhanvika',
-          name: 'Kumar Chenagalla',
+          name: 'Dhanvika Diagnostics (Kumar Chenagalla)',
           email: 'dhanvikadiagnostics@gmail.com',
           role: 'provider',
           phone: '+91 8885282637',
@@ -249,8 +310,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
       }
 
-      const expectedPass = found.password || 'Partner@2026';
-      if (password && password !== expectedPass) {
+      const expectedPass = (found.password || 'Partner@2026').trim();
+      if (trimmedPass && trimmedPass !== expectedPass) {
         return { success: false, error: 'Incorrect provider password. Please verify your password.' };
       }
 
@@ -259,6 +320,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCurrentRole('provider');
       setActiveTab('provider_home');
       setIsAuthenticated(true);
+      if (typeof window !== 'undefined') {
+        window.history.pushState(null, '', '/provider');
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
       showNotification(`Signed in to Provider Portal as ${found.name}.`, 'success');
       return { success: true };
     }
@@ -441,6 +506,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Admin explicitly logs in as a client/provider business to inspect their portal
+  const loginAsProvider = (prov: { id: string; businessName: string; contactPerson?: string; email?: string; phone?: string }) => {
+    const provUser: User = {
+      id: `usr_prov_${prov.id.slice(0, 8)}`,
+      name: `${prov.businessName}${prov.contactPerson ? ` (${prov.contactPerson})` : ''}`,
+      email: prov.email || 'dhanvikadiagnostics@gmail.com',
+      role: 'provider',
+      phone: prov.phone || '+91 8885282637',
+      providerId: prov.id
+    };
+    setCurrentUser(provUser);
+    setActiveProviderId(prov.id);
+    setCurrentRole('provider');
+    setActiveTab('provider_home');
+    setIsAuthenticated(true);
+    if (typeof window !== 'undefined') {
+      window.history.pushState(null, '', '/provider');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }
+    showNotification(`Switched to Provider Portal for ${prov.businessName}`, 'success');
+  };
+
   // Switch role (only accessible in admin or explicit workflows)
   const switchRole = (role: UserRole) => {
     setCurrentRole(role);
@@ -451,12 +538,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         window.dispatchEvent(new PopStateEvent('popstate'));
       }
     } else if (role === 'provider') {
+      if (currentUser.role !== 'provider') {
+        setCurrentUser({
+          id: 'usr_prov_dhanvika',
+          name: 'Dhanvika Diagnostics (Kumar Chenagalla)',
+          email: 'dhanvikadiagnostics@gmail.com',
+          role: 'provider',
+          phone: '+91 8885282637',
+          providerId: activeProviderId || '44d57460-17b7-48f4-bedd-5ef8dc84078b'
+        });
+      }
       setActiveTab('provider_home');
       if (typeof window !== 'undefined') {
         window.history.pushState(null, '', '/provider');
         window.dispatchEvent(new PopStateEvent('popstate'));
       }
     } else if (role === 'admin') {
+      setCurrentUser(MOCK_USERS.admin);
       setActiveTab('admin_clients');
       if (typeof window !== 'undefined') {
         window.history.pushState(null, '', '/admin');
@@ -474,6 +572,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         currentUser,
         login,
         unifiedLogin,
+        loginAsProvider,
         registerAffiliate,
         registerProviderByAdmin,
         registerProviderUser,

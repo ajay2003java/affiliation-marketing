@@ -16,7 +16,7 @@ export const ProviderLogin: React.FC = () => {
 
     const cleanEmail = email.trim();
     if (!cleanEmail) {
-      setError('Please enter your business / provider email.');
+      setError('Please enter your business email or registered mobile number.');
       return;
     }
     if (!password) {
@@ -173,7 +173,7 @@ export const ProviderLogin: React.FC = () => {
                 marginBottom: '6px'
               }}
             >
-              Registered Business Email
+              Registered Business Email or Mobile Number
             </label>
             <div style={{ position: 'relative' }}>
               <Mail
@@ -187,11 +187,11 @@ export const ProviderLogin: React.FC = () => {
                 }}
               />
               <input
-                type="email"
+                type="text"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="e.g. dhanvikadiagnostics@gmail.com"
+                placeholder="e.g. dhanvikadiagnostics@gmail.com or 8885282637"
                 style={{
                   width: '100%',
                   backgroundColor: '#0F172A',
