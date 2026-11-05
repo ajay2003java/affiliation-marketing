@@ -237,7 +237,7 @@ export const ProviderLogin: React.FC<ProviderLoginProps> = ({ isModal = false, o
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="e.g. dhanvikadiagnostics@gmail.com or 8885282637"
+                placeholder="e.g. abc@gmail.com or 9876543210"
                 style={{
                   width: '100%',
                   backgroundColor: '#0F172A',

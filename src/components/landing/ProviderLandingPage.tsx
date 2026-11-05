@@ -140,13 +140,6 @@ export const ProviderLandingPage: React.FC = () => {
           <div className="b2b-nav-actions">
             <button
               onClick={() => setShowLoginModal(true)}
-              className="nav-btn-signin"
-            >
-              Log In
-            </button>
-
-            <button
-              onClick={() => setShowLoginModal(true)}
               className="nav-btn-cta"
             >
               <span>Log In</span>
