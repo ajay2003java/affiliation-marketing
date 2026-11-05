@@ -1,14 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { ShieldCheck, Lock, Mail, ArrowRight, Building2, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Lock, Mail, ArrowRight, Building2, Eye, EyeOff, AlertCircle, X } from 'lucide-react';
 
-export const ProviderLogin: React.FC = () => {
+export interface ProviderLoginProps {
+  isModal?: boolean;
+  onClose?: () => void;
+  onSuccess?: () => void;
+}
+
+export const ProviderLogin: React.FC<ProviderLoginProps> = ({ isModal = false, onClose, onSuccess }) => {
   const { login, showNotification } = useApp();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Close on Escape key
+  useEffect(() => {
+    if (!isModal || !onClose) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isModal, onClose]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,28 +49,63 @@ export const ProviderLogin: React.FC = () => {
         setError(res.error || 'Invalid credentials. Please verify your email and password.');
       } else {
         showNotification('Signed into Provider Portal successfully!', 'success');
+        onSuccess?.();
       }
     } finally {
       setLoading(false);
     }
   };
 
-  return (
+  const content = (
     <div
       style={{
-        minHeight: '100vh',
+        width: '100%',
+        maxWidth: '460px',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'center',
-        background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F172A 100%)',
-        padding: '24px 16px',
-        color: '#F8FAFC',
-        fontFamily: 'Inter, -apple-system, sans-serif'
+        position: 'relative'
       }}
+      onClick={(e) => e.stopPropagation()}
     >
+      {/* Modal Close Button */}
+      {isModal && onClose && (
+        <button
+          onClick={onClose}
+          type="button"
+          aria-label="Close login dialog"
+          style={{
+            position: 'absolute',
+            top: '-8px',
+            right: '-8px',
+            backgroundColor: '#1E293B',
+            color: '#94A3B8',
+            border: '1px solid #334155',
+            borderRadius: '50%',
+            width: '36px',
+            height: '36px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            zIndex: 10,
+            transition: 'all 0.15s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = '#FFFFFF';
+            e.currentTarget.style.borderColor = '#64748B';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = '#94A3B8';
+            e.currentTarget.style.borderColor = '#334155';
+          }}
+        >
+          <X size={20} />
+        </button>
+      )}
+
       {/* Brand Header */}
-      <div style={{ textAlign: 'center', marginBottom: '28px' }}>
+      <div style={{ textAlign: 'center', marginBottom: '24px' }}>
         <div
           style={{
             display: 'inline-flex',
@@ -93,7 +146,7 @@ export const ProviderLogin: React.FC = () => {
         <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#FFFFFF', margin: '4px 0 6px' }}>
           Provider Partner Portal
         </h1>
-        <p style={{ fontSize: '0.9rem', color: '#94A3B8', maxWidth: '420px', margin: '0 auto' }}>
+        <p style={{ fontSize: '0.88rem', color: '#94A3B8', maxWidth: '420px', margin: '0 auto', lineHeight: 1.4 }}>
           Sign in to manage your clinic service packages, pricing, rate card, and patient referrals.
         </p>
       </div>
@@ -102,12 +155,11 @@ export const ProviderLogin: React.FC = () => {
       <div
         style={{
           width: '100%',
-          maxWidth: '440px',
           backgroundColor: '#1E293B',
           borderRadius: '16px',
           border: '1px solid #334155',
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)',
-          padding: '32px 28px'
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6)',
+          padding: '28px 24px'
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '22px' }}>
@@ -296,19 +348,60 @@ export const ProviderLogin: React.FC = () => {
       </div>
 
       {/* Footer Navigation */}
-      <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '0.82rem', color: '#94A3B8' }}>
+      <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '0.82rem', color: '#94A3B8' }}>
         <span>Not a service provider? </span>
         <a
           href="/"
           style={{ color: '#F59E0B', textDecoration: 'none', fontWeight: 600 }}
           onClick={(e) => {
             e.preventDefault();
+            if (isModal && onClose) onClose();
             window.location.href = '/';
           }}
         >
           Go to Affiliate Referral Network &rarr;
         </a>
       </div>
+    </div>
+  );
+
+  if (isModal) {
+    return (
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.85)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '24px 16px',
+          overflowY: 'auto'
+        }}
+        onClick={onClose}
+      >
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0F172A 100%)',
+        padding: '24px 16px',
+        color: '#F8FAFC',
+        fontFamily: 'Inter, -apple-system, sans-serif'
+      }}
+    >
+      {content}
     </div>
   );
 };

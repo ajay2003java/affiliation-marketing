@@ -18,7 +18,7 @@ import { ProviderHome } from './components/provider/ProviderHome';
 import { OfferingManager } from './components/provider/OfferingManager';
 import { AgreementView } from './components/provider/AgreementView';
 import { ProviderProfile } from './components/provider/ProviderProfile';
-import { ProviderLogin } from './components/provider/ProviderLogin';
+import { ProviderLandingPage } from './components/landing/ProviderLandingPage';
 
 // Admin views (Our Company: Full Governance, Clients, Taxonomy & Ledger)
 import { AdminClientManager } from './components/admin/AdminClientManager';
@@ -144,11 +144,23 @@ const AppContent: React.FC = () => {
     return () => window.removeEventListener('popstate', handleUrlChange);
   }, []);
 
+  // 0. ADMIN GLOBAL ACCESS (Admin staff can log in from any landing page)
+  if (isAuthenticated && currentRole === 'admin') {
+    return (
+      <div className="app-container">
+        <Header />
+        <SubNav />
+        <MainRouter />
+        <AppFooter />
+      </div>
+    );
+  }
+
   // 1. PROVIDER ROUTE (/provider)
   // Strictly requires authenticated provider. If logged in as admin or unauthenticated, show Provider Login!
   if (route === 'provider') {
     if (!isAuthenticated || currentRole !== 'provider') {
-      return <ProviderLogin />;
+      return <ProviderLandingPage />;
     }
 
     return (

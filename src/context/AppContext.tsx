@@ -321,21 +321,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: false, error: 'Please enter a valid password (minimum 6 characters).' };
     }
 
+    // RULE: Admin staff can log in from ANY landing page or portal
+    const isAdminEmail =
+      !isPhone &&
+      (cleanEmail === MOCK_USERS.admin.email.toLowerCase() ||
+        cleanEmail === 'admin@ottobon.in' ||
+        cleanEmail === 'academy@ottobon.in');
+
+    if (isAdminEmail) {
+      if (
+        trimmedPassword !== 'Ottobon@Admin2026' &&
+        trimmedPassword !== 'Partner@2026' &&
+        trimmedPassword !== 'Admin@2026'
+      ) {
+        return { success: false, error: 'Invalid admin credentials. Please enter the correct password.' };
+      }
+      setCurrentUser(MOCK_USERS.admin);
+      setCurrentRole('admin');
+      setActiveTab('admin_clients');
+      setIsAuthenticated(true);
+      showNotification(`Welcome back, ${MOCK_USERS.admin.name}! Admin Operations Desk unlocked.`, 'success');
+      return { success: true };
+    }
+
     // STRICT RULE 1: On Affiliate Landing Page (sbloom.ottobon.in), ONLY Affiliates can log in
     if (activePortal === 'affiliate') {
-      // Reject Admin attempts on affiliate page
-      if (
-        !isPhone &&
-        (cleanEmail === MOCK_USERS.admin.email.toLowerCase() ||
-          cleanEmail === 'admin@ottobon.in' ||
-          cleanEmail === 'academy@ottobon.in')
-      ) {
-        return {
-          success: false,
-          error: 'This page is strictly for Affiliate Partners. Admins must log in at sbloom.ottobon.in/admin'
-        };
-      }
-
       // Reject Provider attempts on affiliate page
       const allKnownProviders = getAllKnownProviders(savedProviderUsers, liveDbProviders);
       const isProv = allKnownProviders.some(
@@ -378,19 +388,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // STRICT RULE 2: On Provider Portal (sbloom.ottobon.in/provider), ONLY Providers can log in
     if (activePortal === 'provider') {
-      // Reject Admin attempts on provider page
-      if (
-        !isPhone &&
-        (cleanEmail === MOCK_USERS.admin.email.toLowerCase() ||
-          cleanEmail === 'admin@ottobon.in' ||
-          cleanEmail === 'academy@ottobon.in')
-      ) {
-        return {
-          success: false,
-          error: 'This page is strictly for Service Providers. Admins must log in at sbloom.ottobon.in/admin'
-        };
-      }
-
       // Reject Affiliate attempts on provider page
       const isAff = savedAffiliateUsers.some(
         (a) =>
