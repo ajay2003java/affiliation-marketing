@@ -321,57 +321,104 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: false, error: 'Please enter a valid password (minimum 6 characters).' };
     }
 
-    // 1. Admin role check: Admin can login from ANY landing page (affiliate, provider, or admin)
-    if (
-      !isPhone &&
-      (cleanEmail === MOCK_USERS.admin.email.toLowerCase() ||
-        cleanEmail === 'admin@ottobon.in' ||
-        cleanEmail === 'academy@ottobon.in')
-    ) {
+    // STRICT RULE 1: On Affiliate Landing Page (sbloom.ottobon.in), ONLY Affiliates can log in
+    if (activePortal === 'affiliate') {
+      // Reject Admin attempts on affiliate page
       if (
-        trimmedPassword !== 'Ottobon@Admin2026' &&
-        trimmedPassword !== 'Partner@2026' &&
-        trimmedPassword !== 'Admin@2026'
+        !isPhone &&
+        (cleanEmail === MOCK_USERS.admin.email.toLowerCase() ||
+          cleanEmail === 'admin@ottobon.in' ||
+          cleanEmail === 'academy@ottobon.in')
       ) {
-        return { success: false, error: 'Invalid admin credentials. Please enter the correct password.' };
+        return {
+          success: false,
+          error: 'This page is strictly for Affiliate Partners. Admins must log in at sbloom.ottobon.in/admin'
+        };
       }
-      setCurrentUser(MOCK_USERS.admin);
-      setCurrentRole('admin');
-      setActiveTab('admin_clients');
+
+      // Reject Provider attempts on affiliate page
+      const allKnownProviders = getAllKnownProviders(savedProviderUsers, liveDbProviders);
+      const isProv = allKnownProviders.some(
+        (p) =>
+          (p.email && p.email.toLowerCase() === cleanEmail) ||
+          phoneMatches(p.phone, cleanDigits)
+      );
+      if (isProv) {
+        return {
+          success: false,
+          error: 'This page is strictly for Affiliate Partners. Service Providers must log in at sbloom.ottobon.in/provider'
+        };
+      }
+
+      // Authenticate Affiliate
+      const foundAffiliate = savedAffiliateUsers.find(
+        (a) =>
+          (a.email && a.email.toLowerCase() === cleanEmail) ||
+          phoneMatches(a.phone, cleanDigits)
+      );
+      if (!foundAffiliate) {
+        return {
+          success: false,
+          error: 'Affiliate account not found. Please verify your email or register as an Affiliate Partner.'
+        };
+      }
+
+      const expectedPassword = (foundAffiliate.password || 'Partner@2026').trim();
+      if (foundAffiliate.password && trimmedPassword !== expectedPassword) {
+        return { success: false, error: 'Incorrect password for affiliate account. Please verify your password.' };
+      }
+
+      setCurrentUser(foundAffiliate);
+      setCurrentRole('affiliate');
+      setActiveTab('affiliate_dashboard');
       setIsAuthenticated(true);
-      if (typeof window !== 'undefined') {
-        window.history.pushState(null, '', '/admin');
-        window.dispatchEvent(new PopStateEvent('popstate'));
-      }
-      showNotification(`Welcome back, ${MOCK_USERS.admin.name}! Admin Operations Desk unlocked.`, 'success');
+      showNotification(`Welcome back, ${foundAffiliate.name}! Connected to Affiliate Workspace.`, 'success');
       return { success: true };
     }
 
-    // 2. Provider accounts check (Supports ALL verified partner providers + runtime providers)
-    const allKnownProviders = getAllKnownProviders(savedProviderUsers, liveDbProviders);
-    const foundProvider = allKnownProviders.find(
-      (p) =>
-        (p.email && p.email.toLowerCase() === cleanEmail) ||
-        phoneMatches(p.phone, cleanDigits)
-    );
-
-    if (foundProvider) {
-      // STRICT ISOLATION: Providers CANNOT login from Affiliate Landing Page
-      if (activePortal === 'affiliate') {
+    // STRICT RULE 2: On Provider Portal (sbloom.ottobon.in/provider), ONLY Providers can log in
+    if (activePortal === 'provider') {
+      // Reject Admin attempts on provider page
+      if (
+        !isPhone &&
+        (cleanEmail === MOCK_USERS.admin.email.toLowerCase() ||
+          cleanEmail === 'admin@ottobon.in' ||
+          cleanEmail === 'academy@ottobon.in')
+      ) {
         return {
           success: false,
-          error: `Account recognized for ${foundProvider.name}. However, this landing page is for Affiliate Partners only. Verified Service Providers must sign in at the Provider Portal (sbloom.ottobon.in/provider).`
+          error: 'This page is strictly for Service Providers. Admins must log in at sbloom.ottobon.in/admin'
         };
       }
 
-      if (activePortal === 'admin') {
+      // Reject Affiliate attempts on provider page
+      const isAff = savedAffiliateUsers.some(
+        (a) =>
+          (a.email && a.email.toLowerCase() === cleanEmail) ||
+          phoneMatches(a.phone, cleanDigits)
+      );
+      if (isAff) {
         return {
           success: false,
-          error: 'Restricted Access: Providers must sign in at the Provider Portal (/provider).'
+          error: 'This page is strictly for Service Providers. Affiliate partners must log in at sbloom.ottobon.in'
         };
       }
 
-      // Validated for Provider Portal: check password
+      // Authenticate Provider
+      const allKnownProviders = getAllKnownProviders(savedProviderUsers, liveDbProviders);
+      const foundProvider = allKnownProviders.find(
+        (p) =>
+          (p.email && p.email.toLowerCase() === cleanEmail) ||
+          phoneMatches(p.phone, cleanDigits)
+      );
+
+      if (!foundProvider) {
+        return {
+          success: false,
+          error: 'Provider account not registered. Please verify your registered business email or mobile number.'
+        };
+      }
+
       const expectedPassword = (foundProvider.password || 'Partner@2026').trim();
       if (trimmedPassword !== expectedPassword) {
         return { success: false, error: 'Incorrect password for provider account. Please verify your password.' };
@@ -382,68 +429,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCurrentRole('provider');
       setActiveTab('provider_home');
       setIsAuthenticated(true);
-      if (typeof window !== 'undefined') {
-        window.history.pushState(null, '', '/provider');
-        window.dispatchEvent(new PopStateEvent('popstate'));
-      }
       showNotification(`Signed in to Provider Portal (${foundProvider.name}).`, 'success');
       return { success: true };
     }
 
-    // 3. Affiliate accounts check (Self-Registered Affiliates only)
-    const foundSavedAffiliate = savedAffiliateUsers.find(
-      (a) =>
-        (a.email && a.email.toLowerCase() === cleanEmail) ||
-        phoneMatches(a.phone, cleanDigits)
-    );
-
-    if (foundSavedAffiliate) {
-      // STRICT ISOLATION: Affiliates CANNOT login from Provider Login Page
-      if (activePortal === 'provider') {
-        return {
-          success: false,
-          error: `Account recognized for ${foundSavedAffiliate.name}. However, this portal is reserved for Verified Service Providers. Affiliate partners, please sign in at the Affiliate Portal.`
-        };
+    // STRICT RULE 3: On Admin Portal (sbloom.ottobon.in/admin), ONLY Admin staff can log in
+    if (activePortal === 'admin') {
+      if (
+        !isPhone &&
+        (cleanEmail === MOCK_USERS.admin.email.toLowerCase() ||
+          cleanEmail === 'admin@ottobon.in' ||
+          cleanEmail === 'academy@ottobon.in')
+      ) {
+        if (
+          trimmedPassword !== 'Ottobon@Admin2026' &&
+          trimmedPassword !== 'Partner@2026' &&
+          trimmedPassword !== 'Admin@2026'
+        ) {
+          return { success: false, error: 'Invalid admin credentials. Please enter the correct password.' };
+        }
+        setCurrentUser(MOCK_USERS.admin);
+        setCurrentRole('admin');
+        setActiveTab('admin_clients');
+        setIsAuthenticated(true);
+        showNotification(`Welcome back, ${MOCK_USERS.admin.name}! Admin Operations Desk unlocked.`, 'success');
+        return { success: true };
       }
 
-      if (activePortal === 'admin') {
-        return {
-          success: false,
-          error: 'Restricted Access: Admin portal is for authorized Ottobon staff only.'
-        };
-      }
-
-      // Validated for Affiliate Portal: check password
-      const expectedPassword = (foundSavedAffiliate.password || 'Partner@2026').trim();
-      if (foundSavedAffiliate.password && trimmedPassword !== expectedPassword) {
-        return { success: false, error: 'Incorrect password for affiliate account. Please verify your password.' };
-      }
-
-      setCurrentUser(foundSavedAffiliate);
-      setCurrentRole('affiliate');
-      setActiveTab('affiliate_dashboard');
-      setIsAuthenticated(true);
-      if (typeof window !== 'undefined') {
-        window.history.pushState(null, '', '/');
-        window.dispatchEvent(new PopStateEvent('popstate'));
-      }
-      showNotification(`Welcome back, ${foundSavedAffiliate.name}! Connected to Affiliate Workspace.`, 'success');
-      return { success: true };
-    }
-
-    // 4. Portal-specific error messages for non-existent users
-    if (activePortal === 'provider') {
       return {
         success: false,
-        error: 'Provider account not registered. Please verify your registered business email or mobile number, or contact Admin.'
+        error: 'Restricted Access: Only authorized Ottobon staff accounts (@ottobon.in) can log in to Admin Desk.'
       };
     }
-    if (activePortal === 'affiliate') {
-      return {
-        success: false,
-        error: 'Affiliate account not found. Please verify your credentials or register a new Affiliate account.'
-      };
-    }
+
     return {
       success: false,
       error: 'Invalid credentials. Please verify your email/phone and password.'
@@ -458,124 +476,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     providerId?: string,
     portalContext?: PortalContext
   ): { success: boolean; error?: string } => {
-    // Check if called with Unified Auth: login("email@domain.com", "password", ...)
+    // If called with direct input: login("emailOrPhone", "password", ...)
     if (roleOrEmail !== 'affiliate' && roleOrEmail !== 'provider' && roleOrEmail !== 'admin') {
       return unifiedLogin(roleOrEmail, emailOrPass, portalContext);
     }
-
-    const role = roleOrEmail as UserRole;
-    const rawInput = (emailOrPass || '').trim();
-    const cleanEmail = rawInput.toLowerCase();
-    const cleanDigits = rawInput.replace(/\D/g, '');
-    const trimmedPass = (password || '').trim();
-    const activePortal = portalContext || (role === 'admin' ? 'admin' : role === 'provider' ? 'provider' : 'affiliate');
-
-    // 1. Role: Affiliate
-    if (role === 'affiliate') {
-      if (activePortal === 'provider') {
-        return {
-          success: false,
-          error: 'Affiliate accounts cannot sign in through the Provider Portal. Please sign in at the Affiliate Portal.'
-        };
-      }
-      const found = savedAffiliateUsers.find(
-        (a) =>
-          a.email.toLowerCase() === cleanEmail ||
-          phoneMatches(a.phone, cleanDigits)
-      );
-      if (!found) {
-        return {
-          success: false,
-          error: 'Affiliate account not found. Please register as an Affiliate Partner.'
-        };
-      }
-
-      setCurrentUser(found);
-      setCurrentRole('affiliate');
-      setActiveTab('affiliate_dashboard');
-      setIsAuthenticated(true);
-      if (typeof window !== 'undefined') {
-        window.history.pushState(null, '', '/');
-        window.dispatchEvent(new PopStateEvent('popstate'));
-      }
-      showNotification(`Welcome back, ${found.name}! Connected to Affiliate Workspace.`, 'success');
-      return { success: true };
-    }
-
-    // 2. Role: Provider
-    if (role === 'provider') {
-      if (activePortal === 'affiliate') {
-        return {
-          success: false,
-          error: 'Provider accounts must sign in at the Provider Portal (sbloom.ottobon.in/provider).'
-        };
-      }
-      const allKnownProviders = getAllKnownProviders(savedProviderUsers, liveDbProviders);
-      const found = allKnownProviders.find(
-        (p) =>
-          (p.email && p.email.toLowerCase() === cleanEmail) ||
-          phoneMatches(p.phone, cleanDigits)
-      );
-
-      if (!found) {
-        return {
-          success: false,
-          error: 'Provider account not registered. Please contact Admin or apply as a Provider.'
-        };
-      }
-
-      const expectedPass = (found.password || 'Partner@2026').trim();
-      if (trimmedPass && trimmedPass !== expectedPass) {
-        return { success: false, error: 'Incorrect provider password. Please verify your password.' };
-      }
-
-      setCurrentUser(found);
-      setActiveProviderId(found.providerId || providerId || '');
-      setCurrentRole('provider');
-      setActiveTab('provider_home');
-      setIsAuthenticated(true);
-      if (typeof window !== 'undefined') {
-        window.history.pushState(null, '', '/provider');
-        window.dispatchEvent(new PopStateEvent('popstate'));
-      }
-      showNotification(`Signed in to Provider Portal as ${found.name}.`, 'success');
-      return { success: true };
-    }
-
-    // 3. Role: Admin (Admin can log in from ANY portal)
-    if (role === 'admin') {
-      if (
-        cleanEmail !== MOCK_USERS.admin.email.toLowerCase() &&
-        cleanEmail !== 'admin@ottobon.in' &&
-        cleanEmail !== 'academy@ottobon.in'
-      ) {
-        return {
-          success: false,
-          error: 'Restricted Access: Public self-registration is disabled for Admin Operations. Only authorized Ottobon staff accounts (@ottobon.in) are permitted.'
-        };
-      }
-
-      const adminPass = (password || emailOrPass || '').trim();
-      if (adminPass !== 'Ottobon@Admin2026' && adminPass !== 'Admin@2026' && adminPass !== 'Partner@2026') {
-        return {
-          success: false,
-          error: 'Invalid admin credentials. Please enter the correct admin password.'
-        };
-      }
-
-      setCurrentUser(MOCK_USERS.admin);
-      setCurrentRole('admin');
-      setActiveTab('admin_clients');
-      setIsAuthenticated(true);
-      if (typeof window !== 'undefined') {
-        window.history.pushState(null, '', '/admin');
-        window.dispatchEvent(new PopStateEvent('popstate'));
-      }
-      showNotification(`Authenticated as Ottobon Staff Lead (${MOCK_USERS.admin.name}). Admin Operations Desk unlocked.`, 'success');
-      return { success: true };
-    }
-
-    return { success: false, error: 'Invalid login role specified.' };
+    // If called with role: login('provider', "emailOrPhone", "password")
+    return unifiedLogin(emailOrPass || '', password, portalContext || (roleOrEmail as PortalContext));
   };
 
   // Register a new affiliate partner (Public self-registration)

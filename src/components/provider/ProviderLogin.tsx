@@ -37,12 +37,6 @@ export const ProviderLogin: React.FC = () => {
     }
   };
 
-  const handleQuickFill = (fillEmail: string, fillPass: string) => {
-    setEmail(fillEmail);
-    setPassword(fillPass);
-    setError(null);
-  };
-
   return (
     <div
       style={{
@@ -299,44 +293,6 @@ export const ProviderLogin: React.FC = () => {
             <ArrowRight size={18} />
           </button>
         </form>
-
-        {/* Quick fill helper for Dhanvika Diagnostics */}
-        <div
-          style={{
-            marginTop: '22px',
-            paddingTop: '16px',
-            borderTop: '1px solid #334155',
-            fontSize: '0.78rem',
-            color: '#94A3B8'
-          }}
-        >
-          <div style={{ marginBottom: '8px', fontWeight: 600, color: '#CBD5E1' }}>
-            Active Onboarded Provider:
-          </div>
-          <button
-            type="button"
-            onClick={() => handleQuickFill('dhanvikadiagnostics@gmail.com', 'Partner@2026')}
-            style={{
-              width: '100%',
-              backgroundColor: 'rgba(51, 65, 85, 0.4)',
-              border: '1px solid #475569',
-              borderRadius: '6px',
-              padding: '8px 10px',
-              color: '#E2E8F0',
-              fontSize: '0.78rem',
-              textAlign: 'left',
-              cursor: 'pointer',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center'
-            }}
-          >
-            <span>
-              <strong>Dhanvika Diagnostics:</strong> dhanvikadiagnostics@gmail.com
-            </span>
-            <span style={{ color: '#60A5FA', fontWeight: 600 }}>Fill</span>
-          </button>
-        </div>
       </div>
 
       {/* Footer Navigation */}
