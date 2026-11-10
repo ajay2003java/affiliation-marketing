@@ -79,6 +79,7 @@ export const AddServicesModal: React.FC<AddServicesModalProps> = ({ onClose }) =
 
   // Photo Mode State
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [pendingRateCardFile, setPendingRateCardFile] = useState<File | null>(null);
   const [rateCardStoragePath, setRateCardStoragePath] = useState<string | null>(null);
   const [rateCardStorageUrl, setRateCardStorageUrl] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
@@ -157,7 +158,7 @@ Corporate Compliance & Legal Audit 25000`;
           const convReward = Math.max(50, Math.round(price * 0.22));
           parsed.push({
             id: `item_${Date.now()}_${idx}`,
-            selected: true,
+            selected: false, // Must be ticked by provider to save into database
             title,
             category: targetCat,
             price,
@@ -190,12 +191,8 @@ Corporate Compliance & Legal Audit 25000`;
       setImagePreview('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="%230A2540"/><text x="50" y="45" font-size="11" fill="white" text-anchor="middle">RATE CARD</text><text x="50" y="62" font-size="9" fill="%2394A3B8" text-anchor="middle">DOCUMENT</text></svg>');
     }
 
-    // Perform real storage upload to Supabase bucket
-    const uploadRes = await uploadRateCardImage(file, activeProvider.id);
-    if (uploadRes.success && uploadRes.filePath) {
-      setRateCardStoragePath(uploadRes.filePath);
-      setRateCardStorageUrl(uploadRes.fileUrl || uploadRes.filePath);
-    }
+    // Keep file in local state; do NOT upload to database until provider confirms and publishes
+    setPendingRateCardFile(file);
 
     setIsScanning(true);
     setScanStatusMessage(`Scanning "${file.name}" & extracting service offerings and prices...`);
@@ -253,11 +250,17 @@ Corporate Compliance & Legal Audit 25000`;
     }
   };
 
-  // Toggle selection
+  // Toggle selection for a single item
   const toggleItemSelect = (id: string) => {
     setExtractedItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, selected: !item.selected } : item))
     );
+  };
+
+  // Toggle select all / deselect all
+  const toggleSelectAll = () => {
+    const allSelected = extractedItems.length > 0 && extractedItems.every((i) => i.selected);
+    setExtractedItems((prev) => prev.map((item) => ({ ...item, selected: !allSelected })));
   };
 
   // Update item field
@@ -267,12 +270,22 @@ Corporate Compliance & Legal Audit 25000`;
     );
   };
 
-  // Save all selected extracted items in bulk
+  // Save ONLY selected (ticked) extracted items to database
   const handleBulkPublish = () => {
     const selected = extractedItems.filter((i) => i.selected);
     if (selected.length === 0) {
-      alert('Please select at least one service to publish.');
+      alert('Please tick at least one service to store into the database.');
       return;
+    }
+
+    // Now upload rate card document to storage bucket since user confirmed publishing
+    if (pendingRateCardFile) {
+      uploadRateCardImage(pendingRateCardFile, activeProvider.id).then((uploadRes) => {
+        if (uploadRes.success && uploadRes.filePath) {
+          setRateCardStoragePath(uploadRes.filePath);
+          setRateCardStorageUrl(uploadRes.fileUrl || uploadRes.filePath);
+        }
+      });
     }
 
     selected.forEach((item) => {
@@ -318,11 +331,11 @@ Corporate Compliance & Legal Audit 25000`;
         status: 'active'
       });
 
-      // Synchronize to backend
+      // Synchronize strictly only ticked items to Supabase database
       syncOfferingToSupabase(created);
     });
 
-    showNotification(`Published ${selected.length} services successfully!`, 'success');
+    showNotification(`Stored ${selected.length} ticked services in your database!`, 'success');
     onClose();
   };
 
@@ -549,19 +562,37 @@ Corporate Compliance & Legal Audit 25000`;
                   {!isScanning && extractedItems.length > 0 && (
                     <div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--brand-navy)' }}>
-                          Review & Customize Extracted Services ({extractedItems.filter((i) => i.selected).length} selected):
-                        </span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                          You can edit prices or uncheck any service before publishing.
-                        </span>
+                        <div>
+                          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--brand-navy)' }}>
+                            Extracted Services ({extractedItems.filter((i) => i.selected).length} ticked of {extractedItems.length})
+                          </span>
+                          <span style={{ fontSize: '0.78rem', color: '#0E8A5E', fontWeight: 600, display: 'block', marginTop: '2px' }}>
+                            ✓ Tick the checkbox next to the services you want to store in your database.
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-sm"
+                          onClick={toggleSelectAll}
+                          style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+                        >
+                          {extractedItems.every((i) => i.selected) ? 'Untick All' : 'Tick All'}
+                        </button>
                       </div>
 
                       <div className="table-responsive" style={{ maxHeight: '300px' }}>
                         <table className="data-table">
                           <thead>
                             <tr>
-                              <th style={{ width: '40px' }}>Include</th>
+                              <th style={{ width: '50px', textAlign: 'center' }}>
+                                <input
+                                  type="checkbox"
+                                  checked={extractedItems.length > 0 && extractedItems.every((i) => i.selected)}
+                                  onChange={toggleSelectAll}
+                                  title="Tick all / Untick all"
+                                  style={{ cursor: 'pointer' }}
+                                />
+                              </th>
                               <th>Service Name</th>
                               <th style={{ width: '135px' }}>Customer Price (₹)</th>
                               <th style={{ width: '150px' }}>Affiliate: Lead (₹)</th>
@@ -834,7 +865,9 @@ Corporate Compliance & Legal Audit 25000`;
             >
               <Check size={16} />
               <span>
-                Publish {extractedItems.filter((i) => i.selected).length} Extracted Services
+                {extractedItems.filter((i) => i.selected).length === 0
+                  ? 'Tick services above to save to database'
+                  : `Store ${extractedItems.filter((i) => i.selected).length} Ticked Services in Database`}
               </span>
             </button>
           )}

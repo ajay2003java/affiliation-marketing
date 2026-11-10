@@ -217,7 +217,7 @@ Extraction Rules:
 
         results.push({
           id: `claude_item_${Date.now()}_${idx}`,
-          selected: true,
+          selected: false, // Provider must tick to save into database
           title,
           category: targetCategory,
           price: rawPrice,
