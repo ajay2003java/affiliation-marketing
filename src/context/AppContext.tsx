@@ -241,7 +241,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             role: 'provider' as UserRole,
             phone: dp.phone || '',
             providerId: dp.id,
-            password: 'Partner@2026'
+            password: dp.password || 'Partner@2026'
           }));
           setLiveDbProviders(mapped);
         }
@@ -593,6 +593,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         localStorage.setItem(SAVED_PROVIDERS_KEY, JSON.stringify(updatedProviders));
       } catch {
         // ignore
+      }
+
+      // Persist directly to Supabase backend database
+      const provId = currentUser.providerId || activeProviderId;
+      if (provId) {
+        supabase
+          .from('providers')
+          .update({ password: trimmedPassword })
+          .eq('id', provId)
+          .then(({ error }) => {
+            if (error) console.warn('Supabase provider password update note:', error.message);
+          });
       }
     } else if (currentRole === 'affiliate') {
       const matchAffiliate = (a: User) =>
