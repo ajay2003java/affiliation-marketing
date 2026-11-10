@@ -8,7 +8,7 @@ export const AgreementView: React.FC = () => {
   const { providers, offerings } = useData();
   const { activeProviderId } = useApp();
 
-  const activeProvider: Provider | undefined = providers.find((p) => p.id === activeProviderId) || providers[0];
+  const activeProvider: Provider | undefined = providers.find((p) => p.id === activeProviderId);
 
   if (!activeProvider) {
     return (

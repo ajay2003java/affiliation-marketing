@@ -9,7 +9,7 @@ export const OfferingManager: React.FC = () => {
   const { offerings, providers, updateOffering } = useData();
   const { activeProviderId, showNotification } = useApp();
 
-  const activeProvider: Provider | undefined = providers.find((p) => p.id === activeProviderId) || providers[0];
+  const activeProvider: Provider | undefined = providers.find((p) => p.id === activeProviderId);
 
   // Dynamic: Offerings belonging to the currently active provider
   const providerOfferings = activeProvider ? offerings.filter((o) => o.providerId === activeProvider.id) : [];
@@ -70,8 +70,8 @@ export const OfferingManager: React.FC = () => {
 
     const updatedRules = editingOffering.rewardRules.map((r) => {
       if (r.eventType === 'qualified_lead') {
-        const pFee = Number(editLeadFee) || 0;
-        const aReward = Math.round(pFee * 0.5); // Strict 50% MoU policy
+        const aReward = Number(editAffiliateLeadReward) > 0 ? Number(editAffiliateLeadReward) : Math.round((Number(editLeadFee) || 0) * 0.5);
+        const pFee = Math.max(Number(editLeadFee) || 0, aReward);
         return {
           ...r,
           providerFeeRupees: pFee,
@@ -80,8 +80,8 @@ export const OfferingManager: React.FC = () => {
         };
       }
       if (r.eventType === 'successful_conversion') {
-        const pFee = Number(editConvFee) || 0;
-        const aReward = Math.round(pFee * 0.5); // Strict 50% MoU policy
+        const aReward = Number(editAffiliateConvReward) > 0 ? Number(editAffiliateConvReward) : Math.round((Number(editConvFee) || 0) * 0.5);
+        const pFee = Math.max(Number(editConvFee) || 0, aReward);
         return {
           ...r,
           providerFeeRupees: pFee,

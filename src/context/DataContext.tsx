@@ -254,31 +254,56 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let isMounted = true;
     async function loadSupabaseData() {
       try {
-        // 1. Providers from Supabase
-        const { data: dbProviders } = await supabase.from('providers').select('*');
+        // 1. Providers and Agreements from Supabase
+        const [{ data: dbProviders }, { data: dbAgreements }] = await Promise.all([
+          supabase.from('providers').select('*'),
+          supabase.from('provider_agreements').select('*')
+        ]);
+
         if (isMounted && dbProviders && dbProviders.length > 0) {
           setProviders((prev) => {
             const dbProviderIds = new Set(dbProviders.map((p) => p.id));
             const filteredPrev = prev.filter((p) => !dbProviderIds.has(p.id));
 
-            const newOnes: Provider[] = dbProviders.map((dbp) => ({
-              id: dbp.id,
-              userId: dbp.user_id || `usr_prov_${dbp.id.slice(0, 8)}`,
-              businessName: dbp.business_name,
-              tagline: dbp.tagline || 'Commercial Service Provider',
-              contactPerson: dbp.contact_person,
-              email: dbp.email,
-              phone: dbp.phone,
-              address: dbp.address || '',
-              city: dbp.city,
-              serviceAreas: dbp.service_areas || ['All Areas'],
-              description: dbp.description || '',
-              status: dbp.status || 'active',
-              agreementStatus: 'active' as const,
-              amountPaidRupees: Number(dbp.amount_paid_rupees) || 0,
-              logoUrl: dbp.logo_url || undefined,
-              activeAgreements: []
-            }));
+            const newOnes: Provider[] = dbProviders.map((dbp) => {
+              const matchingAgreements = (dbAgreements || [])
+                .filter((a: any) => a.provider_id === dbp.id)
+                .map((a: any) => ({
+                  id: a.id,
+                  providerId: a.provider_id,
+                  title: a.title || 'Affiliate Partnership Agreement',
+                  documentRef: a.document_ref || `AGR-${dbp.id.slice(0, 6)}`,
+                  effectiveDate: a.created_at ? new Date(a.created_at).toISOString().split('T')[0] : '2026-01-01',
+                  validUntil: '2027-12-31',
+                  commercialModel: 'hybrid' as const,
+                  grossReferralPct: Number(a.gross_referral_pct) || 40.0,
+                  affiliateSplitPct: Number(a.affiliate_split_pct) || 50.0,
+                  companySplitPct: Number(a.company_split_pct) || 50.0,
+                  payoutCycle: 'net_15' as const,
+                  minimumThresholdRupees: 500,
+                  status: (a.status as any) || 'active',
+                  annexureServices: []
+                }));
+
+              return {
+                id: dbp.id,
+                userId: dbp.user_id || `usr_prov_${dbp.id.slice(0, 8)}`,
+                businessName: dbp.business_name,
+                tagline: dbp.tagline || 'Commercial Service Provider',
+                contactPerson: dbp.contact_person,
+                email: dbp.email,
+                phone: dbp.phone,
+                address: dbp.address || '',
+                city: dbp.city,
+                serviceAreas: dbp.service_areas || ['All Areas'],
+                description: dbp.description || '',
+                status: dbp.status || 'active',
+                agreementStatus: 'active' as const,
+                amountPaidRupees: Number(dbp.amount_paid_rupees) || 0,
+                logoUrl: dbp.logo_url || undefined,
+                activeAgreements: matchingAgreements
+              };
+            });
             return [...newOnes, ...filteredPrev];
           });
         }
@@ -319,39 +344,85 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
         }
 
-        // 3. Referrals from Supabase
-        const { data: dbReferrals } = await supabase.from('referrals').select('*');
-        if (isMounted && dbReferrals && dbReferrals.length > 0) {
-          setReferrals((prev) => {
-            const dbReferralIds = new Set(dbReferrals.map((r) => r.id));
-            const filteredPrev = prev.filter((r) => !dbReferralIds.has(r.id));
+        // 3. Referrals AND Public Landing Page Leads from Supabase
+        const [{ data: dbReferrals }, { data: dbLeads }] = await Promise.all([
+          supabase.from('referrals').select('*'),
+          supabase.from('leads').select('*')
+        ]);
 
-            const newOnes: Referral[] = dbReferrals.map((dbr) => ({
-              id: dbr.id,
-              referralCode: dbr.referral_code,
-              affiliateId: 'usr_aff_01',
-              providerId: dbr.provider_id,
-              offeringId: dbr.offering_id,
-              earningModel: dbr.earning_model || 'lead_conversion',
-              rewardRuleVersion: 1,
-              customerName: dbr.customer_name,
-              customerPhone: dbr.customer_phone,
-              clientPhoneMasked: dbr.client_phone_masked || maskPhoneNumber(dbr.customer_phone),
-              customerEmail: dbr.customer_email || 'customer@example.com',
-              customerCity: dbr.customer_city || 'Hyderabad',
-              customerNotes: dbr.customer_notes || undefined,
-              authorizationConfirmed: true,
-              consentStatus: 'consent_given',
-              leadStatus: dbr.lead_status || 'submitted',
-              conversionStatus: dbr.conversion_status || 'follow_up_in_progress',
-              saleValueRupees: dbr.sale_value_rupees ? Number(dbr.sale_value_rupees) : undefined,
-              partnerInvoiceRef: dbr.partner_invoice_ref || undefined,
-              qualificationNotes: dbr.qualification_notes || undefined,
-              createdAt: dbr.created_at || new Date().toISOString(),
-              updatedAt: dbr.updated_at || new Date().toISOString()
-            }));
-            return [...newOnes, ...filteredPrev];
-          });
+        if (isMounted) {
+          const combinedReferralsMap = new Map<string, Referral>();
+
+          // A. Map patient and business leads submitted from Landing Page
+          if (dbLeads && dbLeads.length > 0) {
+            dbLeads.forEach((dbl: any) => {
+              const isConverted = dbl.status === 'Converted';
+              const isRejected = dbl.status === 'Rejected';
+              const isQualified = dbl.status === 'Qualified' || isConverted;
+              combinedReferralsMap.set(dbl.id, {
+                id: dbl.id,
+                referralCode: dbl.reference_number || `SBL-${dbl.id.slice(0, 6)}`,
+                affiliateId: dbl.affiliate_id || 'usr_aff_direct',
+                providerId: dbl.provider_id || '',
+                offeringId: '',
+                earningModel: 'lead_conversion',
+                rewardRuleVersion: 1,
+                customerName: dbl.contact_name || dbl.business_name || 'Prospective Client',
+                customerPhone: dbl.phone || '',
+                clientPhoneMasked: maskPhoneNumber(dbl.phone || '9876543210'),
+                customerEmail: dbl.email || 'customer@example.com',
+                customerCity: dbl.location || 'Hyderabad',
+                customerNotes: dbl.business_requirements || undefined,
+                authorizationConfirmed: true,
+                consentStatus: 'consent_given',
+                leadStatus: isQualified ? 'qualified' : 'submitted',
+                conversionStatus: isConverted ? 'converted' : isRejected ? 'not_converted' : 'follow_up_in_progress',
+                saleValueRupees: dbl.estimated_deal_value ? Number(dbl.estimated_deal_value) : undefined,
+                partnerInvoiceRef: undefined,
+                qualificationNotes: dbl.notes || undefined,
+                createdAt: dbl.created_at || new Date().toISOString(),
+                updatedAt: dbl.updated_at || new Date().toISOString()
+              });
+            });
+          }
+
+          // B. Overlay explicit referral records (takes precedence on matching IDs)
+          if (dbReferrals && dbReferrals.length > 0) {
+            dbReferrals.forEach((dbr: any) => {
+              combinedReferralsMap.set(dbr.id, {
+                id: dbr.id,
+                referralCode: dbr.referral_code,
+                affiliateId: dbr.affiliate_id || 'usr_aff_01',
+                providerId: dbr.provider_id,
+                offeringId: dbr.offering_id,
+                earningModel: dbr.earning_model || 'lead_conversion',
+                rewardRuleVersion: 1,
+                customerName: dbr.customer_name,
+                customerPhone: dbr.customer_phone,
+                clientPhoneMasked: dbr.client_phone_masked || maskPhoneNumber(dbr.customer_phone),
+                customerEmail: dbr.customer_email || 'customer@example.com',
+                customerCity: dbr.customer_city || 'Hyderabad',
+                customerNotes: dbr.customer_notes || undefined,
+                authorizationConfirmed: true,
+                consentStatus: 'consent_given',
+                leadStatus: dbr.lead_status || 'submitted',
+                conversionStatus: dbr.conversion_status || 'follow_up_in_progress',
+                saleValueRupees: dbr.sale_value_rupees ? Number(dbr.sale_value_rupees) : undefined,
+                partnerInvoiceRef: dbr.partner_invoice_ref || undefined,
+                qualificationNotes: dbr.qualification_notes || undefined,
+                createdAt: dbr.created_at || new Date().toISOString(),
+                updatedAt: dbr.updated_at || new Date().toISOString()
+              });
+            });
+          }
+
+          if (combinedReferralsMap.size > 0) {
+            setReferrals((prev) => {
+              const allDbIds = new Set(combinedReferralsMap.keys());
+              const filteredPrev = prev.filter((r) => !allDbIds.has(r.id));
+              return [...Array.from(combinedReferralsMap.values()), ...filteredPrev];
+            });
+          }
         }
       } catch (err) {
         console.warn('Initial Supabase fetch warning:', err);
@@ -519,6 +590,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Sync updated referral to Supabase live database
     syncReferralToSupabase(updatedRef);
 
+    // Sync to Supabase leads table if it originated from there
+    const leadDbStatus = status === 'qualified' ? 'Qualified' : status === 'qualification_rejected' ? 'Rejected' : 'Contacted';
+    supabase
+      .from('leads')
+      .update({
+        status: leadDbStatus,
+        notes: notes || undefined,
+        updated_at: now
+      })
+      .eq('id', referralId)
+      .then(() => {});
+
     addAuditLog(
       ref.providerId,
       actorName,
@@ -622,6 +705,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Sync updated referral outcome to Supabase live database
     syncReferralToSupabase(updatedRef);
+
+    // Sync to Supabase leads table if it originated from there
+    const leadDbStatus = status === 'converted' ? 'Converted' : status === 'not_converted' ? 'Rejected' : 'Contacted';
+    supabase
+      .from('leads')
+      .update({
+        status: leadDbStatus,
+        notes: notes || undefined,
+        estimated_deal_value: saleValue || undefined,
+        updated_at: now
+      })
+      .eq('id', referralId)
+      .then(() => {});
 
     addAuditLog(
       ref.providerId,
@@ -1207,8 +1303,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateProvider = (id: string, data: Partial<Provider>) => {
+    let updatedProv: Provider | undefined;
     setProviders((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, ...data } : p))
+      prev.map((p) => {
+        if (p.id === id) {
+          updatedProv = { ...p, ...data };
+          return updatedProv;
+        }
+        return p;
+      })
     );
 
     addAuditLog(
@@ -1220,6 +1323,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id,
       `Updated provider business profile`
     );
+
+    // Persist provider profile changes to Supabase live database
+    if (updatedProv) {
+      syncProviderToSupabase(updatedProv);
+    }
   };
 
   const recordClientPayment = (providerId: string, amount: number, notes?: string) => {
@@ -1232,6 +1340,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
 
     const prov = providers.find((p) => p.id === providerId);
+    if (prov) {
+      syncProviderToSupabase({
+        ...prov,
+        amountPaidRupees: (prov.amountPaidRupees || 0) + amount
+      });
+    }
+
     addAuditLog(
       'usr_admin_01',
       'Ottobon Finance Desk',
@@ -1250,23 +1365,26 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     createNewVersion = false
   ) => {
     const now = new Date().toISOString();
+    let updatedOff: ProviderOffering | undefined;
     setOfferings((prev) =>
       prev.map((o) => {
         if (o.id !== offeringId) return o;
         if (createNewVersion) {
-          return {
+          updatedOff = {
             ...o,
             ...data,
             version: (o.version || 1) + 1,
             status: 'pending_review',
             updatedAt: now
           };
+          return updatedOff;
         }
-        return {
+        updatedOff = {
           ...o,
           ...data,
           updatedAt: now
         };
+        return updatedOff;
       })
     );
 
@@ -1279,6 +1397,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       offeringId,
       `Offering terms updated. Version: ${createNewVersion ? 'incremented (routed to pending_review)' : 'modified in-place'}.`
     );
+
+    // Persist offering changes and reward rules to Supabase live database
+    if (updatedOff) {
+      syncOfferingToSupabase(updatedOff);
+    }
   };
 
   // Create Compensating Financial Adjustment / Reversal Entry (PRD Sec 7.3, 10 & 13)

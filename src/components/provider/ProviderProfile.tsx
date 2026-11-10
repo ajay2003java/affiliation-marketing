@@ -8,18 +8,18 @@ export const ProviderProfile: React.FC = () => {
   const { providers, updateProvider } = useData();
   const { activeProviderId, showNotification, changeUserPassword, currentUser } = useApp();
 
-  const provider: Provider = providers.find((p) => p.id === activeProviderId) || providers[0];
+  const provider: Provider | undefined = providers.find((p) => p.id === activeProviderId);
 
   const [isEditing, setIsEditing] = useState(false);
-  const [bizName, setBizName] = useState(provider.businessName);
-  const [tagline, setTagline] = useState(provider.tagline);
-  const [address, setAddress] = useState(provider.address);
-  const [city, setCity] = useState(provider.city);
-  const [contactPerson, setContactPerson] = useState(provider.contactPerson);
-  const [phone, setPhone] = useState(provider.phone);
-  const [email, setEmail] = useState(provider.email);
-  const [serviceAreasInput, setServiceAreasInput] = useState(provider.serviceAreas.join(', '));
-  const [description, setDescription] = useState(provider.description);
+  const [bizName, setBizName] = useState(provider?.businessName || '');
+  const [tagline, setTagline] = useState(provider?.tagline || '');
+  const [address, setAddress] = useState(provider?.address || '');
+  const [city, setCity] = useState(provider?.city || '');
+  const [contactPerson, setContactPerson] = useState(provider?.contactPerson || '');
+  const [phone, setPhone] = useState(provider?.phone || '');
+  const [email, setEmail] = useState(provider?.email || '');
+  const [serviceAreasInput, setServiceAreasInput] = useState(provider?.serviceAreas?.join(', ') || '');
+  const [description, setDescription] = useState(provider?.description || '');
 
   // Password management state
   const [showPasswordForm, setShowPasswordForm] = useState(false);
@@ -32,6 +32,7 @@ export const ProviderProfile: React.FC = () => {
 
   // Sync state if active provider switches
   React.useEffect(() => {
+    if (!provider) return;
     setBizName(provider.businessName);
     setTagline(provider.tagline);
     setAddress(provider.address);
@@ -42,7 +43,21 @@ export const ProviderProfile: React.FC = () => {
     setServiceAreasInput(provider.serviceAreas.join(', '));
     setDescription(provider.description);
     setIsEditing(false);
-  }, [provider.id]);
+  }, [provider?.id]);
+
+  if (!provider) {
+    return (
+      <div style={{ maxWidth: '880px', margin: '40px auto', padding: '48px 24px', textAlign: 'center', backgroundColor: '#FFFFFF', borderRadius: '12px', border: '1px solid var(--border-light)' }}>
+        <Building2 size={48} color="var(--brand-cobalt)" style={{ margin: '0 auto 16px' }} />
+        <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--brand-navy)', marginBottom: '8px' }}>
+          Provider Account Not Found
+        </h2>
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', maxWidth: '520px', margin: '0 auto 24px' }}>
+          Please verify that you are logged into your registered provider business account.
+        </p>
+      </div>
+    );
+  }
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();

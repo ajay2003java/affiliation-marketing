@@ -22,7 +22,7 @@ export const SubNav: React.FC = () => {
   const { currentRole, activeTab, setActiveTab, activeProviderId } = useApp();
   const { providers } = useData();
 
-  const activeProvider = providers.find((p) => p.id === activeProviderId) || providers[0];
+  const activeProvider = providers.find((p) => p.id === activeProviderId);
 
   return (
     <div className="role-subbar">
@@ -35,7 +35,7 @@ export const SubNav: React.FC = () => {
             {currentRole === 'admin' && 'ADMIN & OPERATIONS DESK'}
           </span>
 
-          {currentRole === 'provider' && (
+          {currentRole === 'provider' && activeProvider && (
             <span style={{ fontSize: '0.84rem', color: 'rgba(255,255,255,0.9)', fontWeight: 600 }}>
               {activeProvider.businessName} ({activeProvider.city})
             </span>

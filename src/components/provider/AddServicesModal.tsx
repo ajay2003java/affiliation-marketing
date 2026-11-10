@@ -39,7 +39,20 @@ export const AddServicesModal: React.FC<AddServicesModalProps> = ({ onClose }) =
   const { categories, createOffering, providers } = useData();
   const { activeProviderId, showNotification } = useApp();
 
-  const activeProvider: Provider = providers.find((p) => p.id === activeProviderId) || providers[0];
+  const matchedProvider = providers.find((p) => p.id === activeProviderId);
+  const activeProvider: Provider = matchedProvider || ({
+    id: activeProviderId || 'prov_custom',
+    businessName: 'Service Provider',
+    city: 'Hyderabad',
+    description: '',
+    contactPerson: 'Authorized Signatory',
+    email: '',
+    phone: '',
+    serviceAreas: ['Hyderabad'],
+    status: 'active',
+    agreementStatus: 'active',
+    amountPaidRupees: 0
+  } as Provider);
 
   // Determine provider business category based on name & description
   const isHealthcare = /diag|health|clinic|medic|fetal|care|hospital|pathol|scan|doctor/i.test(

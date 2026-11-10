@@ -39,8 +39,7 @@ export const ProviderHome: React.FC = () => {
   const { activeProviderId, showNotification } = useApp();
 
   const activeProvider: Provider | undefined =
-    providers.find((p) => p.id === activeProviderId) ||
-    providers[0];
+    providers.find((p) => p.id === activeProviderId);
 
   // Referrals and Offerings belonging to this provider
   const providerReferrals = activeProvider
@@ -124,7 +123,7 @@ export const ProviderHome: React.FC = () => {
         'converted',
         saleVal,
         `Customer converted. Sale: ₹${saleVal}. Invoice: ${invoiceRefInput}. ${actionNotes}`,
-        activeProvider.contactPerson
+        activeProvider?.contactPerson || 'Provider'
       );
       showNotification(`Referral for ${referral.customerName} marked as Converted (₹${saleVal.toLocaleString('en-IN')})!`, 'success');
     } else if (type === 'lost') {
@@ -133,7 +132,7 @@ export const ProviderHome: React.FC = () => {
         'not_converted',
         0,
         `Customer lost / declined: ${actionNotes || 'Customer opted out or did not proceed.'}`,
-        activeProvider.contactPerson
+        activeProvider?.contactPerson || 'Provider'
       );
       showNotification(`Referral for ${referral.customerName} updated as Not Converted.`, 'info');
     } else if (type === 'qualify') {
@@ -141,7 +140,7 @@ export const ProviderHome: React.FC = () => {
         referral.id,
         'qualified',
         actionNotes || 'Contact and interest verified by provider.',
-        activeProvider.contactPerson
+        activeProvider?.contactPerson || 'Provider'
       );
       showNotification(`Lead for ${referral.customerName} qualified!`, 'success');
     }
