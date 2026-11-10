@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { uploadRateCardImage, syncOfferingToSupabase } from '../../services/supabaseClient';
 import { extractRawTextFromMouFile } from '../../services/mouParser';
+import { scanRateCardWithClaude, isClaudeConfigured } from '../../services/aiRateCardScanner';
 
 interface AddServicesModalProps {
   onClose: () => void;
@@ -200,10 +201,26 @@ Corporate Compliance & Legal Audit 25000`;
     setScanStatusMessage(`Scanning "${file.name}" & extracting service offerings and prices...`);
 
     try {
-      const rawText = await extractRawTextFromMouFile(file, (msg) => setScanStatusMessage(msg));
-      const items = parseOcrOrMenuText(rawText, file.name);
+      // 1. Try Claude Vision AI first (Strictly for uploaded provider rate cards / pictures)
+      let items: ExtractedItem[] | null = null;
+      if (isClaudeConfigured()) {
+        setScanStatusMessage(`Claude AI Vision is scanning "${file.name}"...`);
+        items = await scanRateCardWithClaude(
+          file,
+          activeProvider.businessName,
+          defaultCategory,
+          (msg) => setScanStatusMessage(msg)
+        );
+      }
 
-      if (items.length > 0) {
+      // 2. If Claude not configured or returns null, use local OCR / parser as fallback
+      if (!items || items.length === 0) {
+        setScanStatusMessage(`Scanning "${file.name}" with document parser...`);
+        const rawText = await extractRawTextFromMouFile(file, (msg) => setScanStatusMessage(msg));
+        items = parseOcrOrMenuText(rawText, file.name);
+      }
+
+      if (items && items.length > 0) {
         setExtractedItems(items);
         showNotification(`Extracted ${items.length} services & prices from your rate card!`, 'success');
       } else {
