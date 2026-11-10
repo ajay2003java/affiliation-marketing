@@ -147,10 +147,10 @@ Extraction Rules:
       headers['anthropic-beta'] = 'pdfs-2024-09-25';
     }
 
-    // Fast, cost-efficient, and accurate vision model
-    // Fall back to claude-3-haiku-20240307 if 3.5 haiku is not available on key tier
+    // State-of-the-art vision model (best for complex lab menus, tables, and tariff sheets)
+    // Fall back to claude-3-haiku-20240307 if not available on key tier
     const payload = {
-      model: 'claude-3-5-haiku-20241022',
+      model: 'claude-3-5-sonnet-20241022',
       max_tokens: 1800,
       temperature: 0.1,
       messages: [
@@ -235,3 +235,4 @@ Extraction Rules:
     return null;
   }
 }
+
