@@ -585,25 +585,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updatedProviders.push(updatedUser);
       }
       setSavedProviderUsers(updatedProviders);
-
-      // Also update in-memory live DB provider cache so subsequent authentications within the session succeed
-      setLiveDbProviders((prev) =>
-        prev.map((p) =>
-          (p.email && p.email.toLowerCase() === currentUser.email.toLowerCase()) ||
-          p.providerId === activeProviderId
-            ? { ...p, password: trimmedPassword }
-            : p
-        )
-      );
-
       try {
         localStorage.setItem(SAVED_PROVIDERS_KEY, JSON.stringify(updatedProviders));
-        const currentSession = sessionStorage.getItem(AUTH_STORAGE_KEY);
-        if (currentSession) {
-          const parsed = JSON.parse(currentSession);
-          parsed.currentUser = updatedUser;
-          sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(parsed));
-        }
       } catch {
         // ignore
       }
