@@ -576,12 +576,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCurrentUser(updatedUser);
 
     if (currentRole === 'provider') {
+      const matchProvider = (p: User) =>
+        (p.id && currentUser.id && p.id === currentUser.id) ||
+        (p.providerId && currentUser.providerId && p.providerId === currentUser.providerId) ||
+        (p.email && currentUser.email && p.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+        (p.phone && currentUser.phone && phoneMatches(p.phone, currentUser.phone.replace(/\D/g, '')));
+
       const updatedProviders = savedProviderUsers.map((p) =>
-        p.email.toLowerCase() === currentUser.email.toLowerCase()
-          ? { ...p, password: trimmedPassword }
-          : p
+        matchProvider(p) ? { ...p, password: trimmedPassword } : p
       );
-      if (!updatedProviders.some((p) => p.email.toLowerCase() === currentUser.email.toLowerCase())) {
+      if (!updatedProviders.some(matchProvider)) {
         updatedProviders.push(updatedUser);
       }
       setSavedProviderUsers(updatedProviders);
@@ -591,11 +595,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // ignore
       }
     } else if (currentRole === 'affiliate') {
+      const matchAffiliate = (a: User) =>
+        (a.id && currentUser.id && a.id === currentUser.id) ||
+        (a.email && currentUser.email && a.email.toLowerCase() === currentUser.email.toLowerCase()) ||
+        (a.phone && currentUser.phone && phoneMatches(a.phone, currentUser.phone.replace(/\D/g, '')));
+
       const updatedAffiliates = savedAffiliateUsers.map((a) =>
-        a.email.toLowerCase() === currentUser.email.toLowerCase()
-          ? { ...a, password: trimmedPassword }
-          : a
+        matchAffiliate(a) ? { ...a, password: trimmedPassword } : a
       );
+      if (!updatedAffiliates.some(matchAffiliate)) {
+        updatedAffiliates.push(updatedUser);
+      }
       setSavedAffiliateUsers(updatedAffiliates);
       try {
         localStorage.setItem(SAVED_AFFILIATES_KEY, JSON.stringify(updatedAffiliates));
