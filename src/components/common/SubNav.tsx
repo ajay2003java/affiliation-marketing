@@ -1,6 +1,7 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
 import { useData } from '../../context/DataContext';
+import { MOCK_PROVIDERS } from '../../services/mockData';
 import {
   Compass,
   Building,
@@ -19,10 +20,23 @@ import {
 } from 'lucide-react';
 
 export const SubNav: React.FC = () => {
-  const { currentRole, activeTab, setActiveTab, activeProviderId } = useApp();
+  const { currentRole, activeTab, setActiveTab, activeProviderId, currentUser } = useApp();
   const { providers } = useData();
 
-  const activeProvider = providers.find((p) => p.id === activeProviderId);
+  const activeProvider =
+    providers.find(
+      (p) =>
+        p.id === activeProviderId ||
+        p.userId === activeProviderId ||
+        (currentUser.email && p.email?.toLowerCase() === currentUser.email?.toLowerCase())
+    ) ||
+    MOCK_PROVIDERS.find(
+      (p) =>
+        p.id === activeProviderId ||
+        p.userId === activeProviderId ||
+        (currentUser.email && p.email?.toLowerCase() === currentUser.email?.toLowerCase())
+    ) ||
+    (currentRole === 'provider' ? MOCK_PROVIDERS[0] : undefined);
 
   return (
     <div className="role-subbar">
@@ -51,16 +65,24 @@ export const SubNav: React.FC = () => {
                 className={`sub-nav-tab ${(activeTab === 'affiliate_dashboard' || activeTab === 'affiliate_home') ? 'active' : ''}`}
                 onClick={() => setActiveTab('affiliate_dashboard')}
               >
-                <LayoutDashboard size={15} />
-                <span>Dashboard & Share Hub</span>
+                <Send size={15} />
+                <span>Submit Referral</span>
               </button>
               <button
-                id="tab-browse-services"
-                className={`sub-nav-tab ${activeTab === 'browse_services' ? 'active' : ''}`}
-                onClick={() => setActiveTab('browse_services')}
+                id="tab-my-referrals"
+                className={`sub-nav-tab ${activeTab === 'my_referrals' ? 'active' : ''}`}
+                onClick={() => setActiveTab('my_referrals')}
               >
-                <Compass size={15} />
-                <span>Explore Services & Rewards</span>
+                <Users size={15} />
+                <span>Referrals Management</span>
+              </button>
+              <button
+                id="tab-my-commissions"
+                className={`sub-nav-tab ${activeTab === 'my_commissions' ? 'active' : ''}`}
+                onClick={() => setActiveTab('my_commissions')}
+              >
+                <Wallet size={15} />
+                <span>Payments</span>
               </button>
               <button
                 id="tab-browse-providers"
@@ -69,30 +91,6 @@ export const SubNav: React.FC = () => {
               >
                 <Building size={15} />
                 <span>Client Partners</span>
-              </button>
-              <button
-                id="tab-my-referrals"
-                className={`sub-nav-tab ${activeTab === 'my_referrals' ? 'active' : ''}`}
-                onClick={() => setActiveTab('my_referrals')}
-              >
-                <Send size={15} />
-                <span>My Referrals Track</span>
-              </button>
-              <button
-                id="tab-my-commissions"
-                className={`sub-nav-tab ${activeTab === 'my_commissions' ? 'active' : ''}`}
-                onClick={() => setActiveTab('my_commissions')}
-              >
-                <Wallet size={15} />
-                <span>My Commissions & Ledger</span>
-              </button>
-              <button
-                id="tab-my-contacts"
-                className={`sub-nav-tab ${activeTab === 'my_contacts' ? 'active' : ''}`}
-                onClick={() => setActiveTab('my_contacts')}
-              >
-                <Users size={15} />
-                <span>My Address Book</span>
               </button>
               <button
                 id="tab-affiliate-profile"

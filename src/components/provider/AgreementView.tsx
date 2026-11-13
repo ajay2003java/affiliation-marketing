@@ -3,12 +3,26 @@ import { useData } from '../../context/DataContext';
 import { useApp } from '../../context/AppContext';
 import { ShieldCheck, FileText, CheckCircle2, Building, Clock } from 'lucide-react';
 import { Provider } from '../../types';
+import { MOCK_PROVIDERS } from '../../services/mockData';
 
 export const AgreementView: React.FC = () => {
   const { providers, offerings } = useData();
-  const { activeProviderId } = useApp();
+  const { activeProviderId, currentUser, currentRole } = useApp();
 
-  const activeProvider: Provider | undefined = providers.find((p) => p.id === activeProviderId);
+  const activeProvider: Provider | undefined =
+    providers.find(
+      (p) =>
+        p.id === activeProviderId ||
+        p.userId === activeProviderId ||
+        (currentUser.email && p.email?.toLowerCase() === currentUser.email?.toLowerCase())
+    ) ||
+    MOCK_PROVIDERS.find(
+      (p) =>
+        p.id === activeProviderId ||
+        p.userId === activeProviderId ||
+        (currentUser.email && p.email?.toLowerCase() === currentUser.email?.toLowerCase())
+    ) ||
+    (currentRole === 'provider' ? MOCK_PROVIDERS[0] : undefined);
 
   if (!activeProvider) {
     return (

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '../../context/DataContext';
 import { useApp } from '../../context/AppContext';
-import { Referral, Provider, ProviderOffering } from '../../types';
+import { Referral, Provider, ProviderOffering, ProviderMonthlyInvoice, ProviderMonthlyInvoiceItem } from '../../types';
+import { MOCK_PROVIDERS } from '../../services/mockData';
 import { AddServicesModal } from './AddServicesModal';
 import {
   Users,
@@ -23,34 +24,119 @@ import {
   Sparkles,
   Calendar,
   AlertCircle,
-  Building2
+  Building2,
+  FileSpreadsheet,
+  Download,
+  Upload,
+  FileText
 } from 'lucide-react';
+import {
+  downloadReferralReconciliationWorksheet,
+  parseReferralReconciliationExcel
+} from '../../services/excelReferralReconciliation';
+import { analyzeCustomerBillWithClaude } from '../../services/aiBillAnalyzer';
+import { uploadProviderBillReceipt } from '../../services/supabaseClient';
 
 export const ProviderHome: React.FC = () => {
   const {
     referrals,
     offerings,
     providers,
+    providerMonthlyInvoices,
     updateLeadStatus,
     updateConversionStatus,
+    updateRejectionStatus,
+    generateProviderMonthlyInvoice,
+    markProviderMonthlyInvoicePaid,
     logProxyCall,
     maskPhoneNumber
   } = useData();
-  const { activeProviderId, showNotification } = useApp();
+  const { activeProviderId, showNotification, currentUser, currentRole } = useApp();
 
   const activeProvider: Provider | undefined =
-    providers.find((p) => p.id === activeProviderId);
+    providers.find(
+      (p) =>
+        p.id === activeProviderId ||
+        p.userId === activeProviderId ||
+        (currentUser.email && p.email?.toLowerCase() === currentUser.email?.toLowerCase())
+    ) ||
+    MOCK_PROVIDERS.find(
+      (p) =>
+        p.id === activeProviderId ||
+        p.userId === activeProviderId ||
+        (currentUser.email && p.email?.toLowerCase() === currentUser.email?.toLowerCase())
+    ) ||
+    (currentRole === 'provider' ? (providers.find(p => p.status === 'active') || providers[0] || MOCK_PROVIDERS[0]) : undefined);
 
   // Referrals and Offerings belonging to this provider
   const providerReferrals = activeProvider
-    ? referrals.filter((r) => r.providerId === activeProvider.id)
+    ? referrals.filter((r) => r.providerId === activeProvider.id || (activeProviderId && r.providerId === activeProviderId))
     : [];
   const providerOfferings = activeProvider
-    ? offerings.filter((o) => o.providerId === activeProvider.id)
+    ? offerings.filter((o) => o.providerId === activeProvider.id || (activeProviderId && o.providerId === activeProviderId))
     : [];
 
   // Modal: Add Service / Rate Card
   const [showAddServiceModal, setShowAddServiceModal] = useState(false);
+  const [modalInitialTab, setModalInitialTab] = useState<'upload' | 'manual'>('upload');
+
+  // Excel Referral Reconciliation Upload Handler
+  const handleReconcileExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const rows = await parseReferralReconciliationExcel(file);
+      let updatedCount = 0;
+      rows.forEach((row) => {
+        const matchingRef = providerReferrals.find(
+          (r) =>
+            r.referralCode?.toLowerCase() === row.referralCode.toLowerCase() ||
+            (row.customerName && r.customerName.toLowerCase() === row.customerName.toLowerCase())
+        );
+        if (matchingRef) {
+          if (row.action === 'convert') {
+            const sale = row.saleAmount || matchingRef.saleValueRupees || 2000;
+            updateConversionStatus(
+              matchingRef.id,
+              'converted',
+              sale,
+              row.notes
+                ? `${row.notes} (Reconciled from Excel)`
+                : `Customer converted. Sale: ₹${sale}. Invoice: ${row.invoiceRef || 'N/A'}. (Reconciled from Excel)`,
+              activeProvider?.contactPerson || 'Provider Billing'
+            );
+            updatedCount++;
+          } else if (row.action === 'qualify') {
+            updateLeadStatus(
+              matchingRef.id,
+              'qualified',
+              row.notes || 'Contact and interest verified via Excel reconciliation.',
+              activeProvider?.contactPerson || 'Provider Billing'
+            );
+            updatedCount++;
+          } else if (row.action === 'reject') {
+            updateConversionStatus(
+              matchingRef.id,
+              'not_converted',
+              0,
+              row.notes || 'Customer lost / declined (Reconciled from Excel).',
+              activeProvider?.contactPerson || 'Provider Billing'
+            );
+            updatedCount++;
+          }
+        }
+      });
+
+      if (updatedCount > 0) {
+        showNotification(`Bulk reconciliation complete: Updated ${updatedCount} referrals from "${file.name}"!`, 'success');
+      } else {
+        showNotification(`Read ${rows.length} rows from Excel, but no matching referral codes found.`, 'info');
+      }
+    } catch (err: any) {
+      console.warn('Reconciliation error:', err);
+      showNotification(err?.message || 'Failed to read reconciliation spreadsheet.', 'warning');
+    }
+  };
 
   // Search & Filter for Leads
   const [leadSearch, setLeadSearch] = useState('');
@@ -61,9 +147,20 @@ export const ProviderHome: React.FC = () => {
     type: 'convert' | 'lost' | 'qualify';
     referral: Referral;
   } | null>(null);
-  const [saleValueInput, setSaleValueInput] = useState('2000');
+  const [saleValueInput, setSaleValueInput] = useState('100');
   const [invoiceRefInput, setInvoiceRefInput] = useState('INV-2026-');
   const [actionNotes, setActionNotes] = useState('');
+  const [billProofPreview, setBillProofPreview] = useState<string | null>(null);
+  const [selectedBillFile, setSelectedBillFile] = useState<File | null>(null);
+  const [isAnalyzingBill, setIsAnalyzingBill] = useState(false);
+  const [claudeScanFeedback, setClaudeScanFeedback] = useState<string | null>(null);
+  const [isUploadingBill, setIsUploadingBill] = useState(false);
+  const [rejectionReasonInput, setRejectionReasonInput] = useState('Customer cancelled / did not visit');
+
+  // Provider View Tabs: 'leads' vs 'invoices'
+  const [providerViewTab, setProviderViewTab] = useState<'leads' | 'invoices'>('leads');
+  const [viewInvoiceModal, setViewInvoiceModal] = useState<ProviderMonthlyInvoice | null>(null);
+  const [paymentRefInput, setPaymentRefInput] = useState('');
 
   // Encrypted Cloud Telephony Proxy State
   const [callingReferral, setCallingReferral] = useState<Referral | null>(null);
@@ -86,7 +183,13 @@ export const ProviderHome: React.FC = () => {
   const needsActionCount = providerReferrals.filter(
     (r) => r.conversionStatus === 'follow_up_in_progress' || r.leadStatus === 'submitted'
   ).length;
-  const totalConverted = providerReferrals.filter((r) => r.conversionStatus === 'converted').length;
+  const totalConverted = providerReferrals.filter(
+    (r) =>
+      r.conversionStatus === 'converted' ||
+      r.conversionStatus === 'converted_pending_clearance' ||
+      r.conversionStatus === 'cleared_ready_for_payout' ||
+      r.conversionStatus === 'paid_and_settled'
+  ).length;
 
   // Filtered Leads
   const filteredReferrals = providerReferrals.filter((ref) => {
@@ -103,50 +206,120 @@ export const ProviderHome: React.FC = () => {
       return ref.conversionStatus === 'follow_up_in_progress' || ref.leadStatus === 'submitted';
     }
     if (leadFilter === 'converted') {
-      return ref.conversionStatus === 'converted';
+      return (
+        ref.conversionStatus === 'converted' ||
+        ref.conversionStatus === 'converted_pending_clearance' ||
+        ref.conversionStatus === 'cleared_ready_for_payout' ||
+        ref.conversionStatus === 'paid_and_settled'
+      );
     }
 
     return true;
   });
 
+  // Handle Bill Receipt file selection & automatic Claude Vision AI analysis
+  const handleBillFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setSelectedBillFile(file);
+    setClaudeScanFeedback(null);
+
+    // Instant local preview
+    const reader = new FileReader();
+    reader.onload = () => setBillProofPreview(reader.result as string);
+    reader.readAsDataURL(file);
+
+    // Call Claude Vision to analyze the receipt
+    setIsAnalyzingBill(true);
+    try {
+      const res = await analyzeCustomerBillWithClaude(file);
+      if (res.success && res.totalBilledAmount) {
+        setSaleValueInput(res.totalBilledAmount.toString());
+        if (res.invoiceNumber) {
+          setInvoiceRefInput(res.invoiceNumber);
+        }
+        const itemsList = res.itemsDetected && res.itemsDetected.length > 0
+          ? ` • Items: ${res.itemsDetected.join(', ')}`
+          : '';
+        setClaudeScanFeedback(`✨ Claude AI extracted: Total Bill ₹${res.totalBilledAmount}${itemsList}`);
+        showNotification(`Claude AI detected bill total: ₹${res.totalBilledAmount}!`, 'success');
+      } else if (res.error) {
+        setClaudeScanFeedback(`ℹ️ ${res.error}`);
+      }
+    } catch (err: any) {
+      console.warn('Claude bill scan error:', err);
+      setClaudeScanFeedback('⚠️ Could not complete Claude AI bill scan. Please verify amount manually.');
+    } finally {
+      setIsAnalyzingBill(false);
+    }
+  };
+
   // Handle Mark Converted / Lost Submit
-  const handleActionSubmit = (e: React.FormEvent) => {
+  const handleActionSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeModal) return;
 
     const { type, referral } = activeModal;
 
     if (type === 'convert') {
-      const saleVal = parseFloat(saleValueInput) || 2000;
+      const saleVal = parseFloat(saleValueInput) || 100;
+      let finalBillProofUrl = billProofPreview || undefined;
+
+      // Upload receipt file to Supabase storage 'provider-bills' bucket
+      if (selectedBillFile) {
+        setIsUploadingBill(true);
+        try {
+          const uploadRes = await uploadProviderBillReceipt(
+            selectedBillFile,
+            activeProvider?.id || 'general',
+            referral.referralCode
+          );
+          if (uploadRes.success && uploadRes.fileUrl) {
+            finalBillProofUrl = uploadRes.fileUrl;
+          }
+        } catch (err) {
+          console.warn('Bill storage upload warning:', err);
+        } finally {
+          setIsUploadingBill(false);
+        }
+      }
+
       updateConversionStatus(
         referral.id,
-        'converted',
+        'converted_pending_clearance',
         saleVal,
-        `Customer converted. Sale: ₹${saleVal}. Invoice: ${invoiceRefInput}. ${actionNotes}`,
-        activeProvider?.contactPerson || 'Provider'
+        `Customer converted. Sale: ₹${saleVal}. Invoice: ${invoiceRefInput || 'N/A'}. ${actionNotes}`,
+        activeProvider?.contactPerson || 'Provider Billing',
+        finalBillProofUrl,
+        invoiceRefInput || undefined
       );
-      showNotification(`Referral for ${referral.customerName} marked as Converted (₹${saleVal.toLocaleString('en-IN')})!`, 'success');
+      showNotification(`Referral for ${referral.customerName} marked as Converted (Bill: ₹${saleVal.toLocaleString('en-IN')})! Added to monthly billing.`, 'success');
     } else if (type === 'lost') {
-      updateConversionStatus(
+      updateRejectionStatus(
         referral.id,
-        'not_converted',
-        0,
-        `Customer lost / declined: ${actionNotes || 'Customer opted out or did not proceed.'}`,
-        activeProvider?.contactPerson || 'Provider'
+        rejectionReasonInput || 'Customer cancelled / did not visit',
+        actionNotes,
+        activeProvider?.contactPerson || 'Provider Billing'
       );
-      showNotification(`Referral for ${referral.customerName} updated as Not Converted.`, 'info');
+      showNotification(`Referral for ${referral.customerName} marked as Not Converted. 7-day review window active.`, 'info');
     } else if (type === 'qualify') {
       updateLeadStatus(
         referral.id,
         'qualified',
         actionNotes || 'Contact and interest verified by provider.',
-        activeProvider?.contactPerson || 'Provider'
+        activeProvider?.contactPerson || 'Provider Billing'
       );
       showNotification(`Lead for ${referral.customerName} qualified!`, 'success');
     }
 
     setActiveModal(null);
     setActionNotes('');
+    setBillProofPreview(null);
+    setSelectedBillFile(null);
+    setClaudeScanFeedback(null);
+    setIsAnalyzingBill(false);
+    setRejectionReasonInput('Customer cancelled / did not visit');
   };
 
   if (!activeProvider) {
@@ -210,50 +383,107 @@ export const ProviderHome: React.FC = () => {
         </div>
 
         {/* Quick Add Service Button */}
-        <button
-          id="btn-add-service-hero"
-          onClick={() => setShowAddServiceModal(true)}
-          className="btn btn-primary"
-          style={{
-            padding: '11px 20px',
-            fontSize: '0.88rem',
-            fontWeight: 700,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            borderRadius: '8px',
-            boxShadow: '0 4px 14px rgba(0, 82, 204, 0.2)'
-          }}
-        >
-          <Camera size={16} />
-          <span>+ Add Service or Upload Rate Card</span>
-        </button>
+        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          <button
+            id="btn-add-service-hero"
+            onClick={() => {
+              setModalInitialTab('upload');
+              setShowAddServiceModal(true);
+            }}
+            className="btn btn-primary"
+            style={{
+              padding: '11px 20px',
+              fontSize: '0.88rem',
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              borderRadius: '8px',
+              boxShadow: '0 4px 14px rgba(0, 82, 204, 0.2)'
+            }}
+          >
+            <Upload size={16} />
+            <span>+ Upload Rate Card (PDF / Excel / Photo)</span>
+          </button>
+        </div>
       </div>
 
       {/* =========================================================================
-          SECTION 1 (FIRST): How many leads they got & Actionable Lead Cards
+          SECTION 1 (FIRST): Leads or Monthly Invoices
       ========================================================================= */}
       <section style={{ marginBottom: '36px' }}>
-        {/* Section 1 Header & Metrics */}
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '12px',
-            marginBottom: '16px'
-          }}
-        >
+        {/* Navigation Switcher: Leads vs Monthly Invoices */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '2px solid var(--border-light)', paddingBottom: '2px' }}>
+          <button
+            type="button"
+            onClick={() => setProviderViewTab('leads')}
+            style={{
+              padding: '10px 18px',
+              fontSize: '0.90rem',
+              fontWeight: 800,
+              backgroundColor: 'transparent',
+              border: 'none',
+              borderBottom: providerViewTab === 'leads' ? '3px solid var(--brand-cobalt)' : '3px solid transparent',
+              color: providerViewTab === 'leads' ? 'var(--brand-cobalt)' : 'var(--text-muted)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '-2px'
+            }}
+          >
+            <Users size={16} />
+            <span>Customer Leads ({providerReferrals.length})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setProviderViewTab('invoices')}
+            style={{
+              padding: '10px 18px',
+              fontSize: '0.90rem',
+              fontWeight: 800,
+              backgroundColor: 'transparent',
+              border: 'none',
+              borderBottom: providerViewTab === 'invoices' ? '3px solid var(--brand-cobalt)' : '3px solid transparent',
+              color: providerViewTab === 'invoices' ? 'var(--brand-cobalt)' : 'var(--text-muted)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '-2px'
+            }}
+          >
+            <FileText size={16} />
+            <span>Monthly Platform Invoices ({providerMonthlyInvoices.filter((i) => i.providerId === activeProvider.id).length})</span>
+            {providerMonthlyInvoices.some((i) => i.providerId === activeProvider.id && i.status === 'unpaid') && (
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#DC2626' }} />
+            )}
+          </button>
+        </div>
+
+        {providerViewTab === 'leads' ? (
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--brand-navy)', margin: 0 }}>
-                Customer Leads Received
-              </h2>
-              <span
-                style={{
-                  fontSize: '0.85rem',
-                  fontWeight: 800,
+            {/* Section 1 Header & Metrics */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '12px',
+                marginBottom: '16px'
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--brand-navy)', margin: 0 }}>
+                    Customer Leads Received
+                  </h2>
+                  <span
+                    style={{
+                      fontSize: '0.85rem',
+                      fontWeight: 800,
                   backgroundColor: 'var(--brand-navy)',
                   color: '#FFFFFF',
                   padding: '2px 10px',
@@ -327,9 +557,9 @@ export const ProviderHome: React.FC = () => {
           </div>
         </div>
 
-        {/* Search Input (if multiple leads) */}
-        {providerReferrals.length > 2 && (
-          <div style={{ marginBottom: '14px', maxWidth: '380px', position: 'relative' }}>
+        {/* Search & Excel Reconciliation Actions Bar */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
+          <div style={{ flex: 1, minWidth: '220px', maxWidth: '380px', position: 'relative' }}>
             <Search size={14} color="#94A3B8" style={{ position: 'absolute', left: '12px', top: '10px' }} />
             <input
               type="text"
@@ -345,7 +575,44 @@ export const ProviderHome: React.FC = () => {
               }}
             />
           </div>
-        )}
+
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => downloadReferralReconciliationWorksheet(activeProvider.businessName, providerReferrals, offerings)}
+              style={{ fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '6px 12px' }}
+              title="Download all leads in an Excel sheet to check patient visits and enter bill numbers"
+            >
+              <Download size={13} />
+              <span>Export Leads (.xlsx)</span>
+            </button>
+
+            <label
+              className="btn btn-outline btn-sm"
+              style={{
+                fontSize: '0.78rem',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '6px 12px',
+                cursor: 'pointer',
+                borderColor: '#0E8A5E',
+                color: '#0E8A5E'
+              }}
+              title="Upload the completed reconciliation spreadsheet to bulk-update conversion and billing outcomes"
+            >
+              <FileSpreadsheet size={13} />
+              <span>Bulk Reconcile via Excel</span>
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                style={{ display: 'none' }}
+                onChange={handleReconcileExcelUpload}
+              />
+            </label>
+          </div>
+        </div>
 
         {/* Lead Cards List */}
         {providerReferrals.length === 0 ? (
@@ -444,7 +711,22 @@ export const ProviderHome: React.FC = () => {
                           Needs Callback
                         </span>
                       )}
-                      {isConverted && (
+                      {ref.conversionStatus === 'converted_pending_clearance' && (
+                        <span
+                          style={{
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            padding: '3px 8px',
+                            borderRadius: '10px',
+                            backgroundColor: '#FEF3C7',
+                            color: '#92400E',
+                            border: '1px solid #FCD34D'
+                          }}
+                        >
+                          ⏳ Converted (Awaiting Month-End Clearance)
+                        </span>
+                      )}
+                      {(ref.conversionStatus === 'cleared_ready_for_payout' || ref.conversionStatus === 'paid_and_settled') && (
                         <span
                           style={{
                             fontSize: '0.72rem',
@@ -452,13 +734,44 @@ export const ProviderHome: React.FC = () => {
                             padding: '3px 8px',
                             borderRadius: '10px',
                             backgroundColor: '#DCFCE7',
-                            color: '#166534'
+                            color: '#166534',
+                            border: '1px solid #86EFAC'
                           }}
                         >
-                          ✓ Converted
+                          ✓ Cleared & Reconciled
                         </span>
                       )}
-                      {isLost && (
+                      {ref.conversionStatus === 'review_cooling_off' && (
+                        <span
+                          style={{
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            padding: '3px 8px',
+                            borderRadius: '10px',
+                            backgroundColor: '#FEE2E2',
+                            color: '#991B1B',
+                            border: '1px solid #FCA5A5'
+                          }}
+                        >
+                          ⚠️ Marked Lost: {ref.rejectionReason || 'No-Show'} (7-Day Review)
+                        </span>
+                      )}
+                      {ref.conversionStatus === 'disputed' && (
+                        <span
+                          style={{
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            padding: '3px 8px',
+                            borderRadius: '10px',
+                            backgroundColor: '#FEF2F2',
+                            color: '#B91C1C',
+                            border: '1px solid #F87171'
+                          }}
+                        >
+                          🚨 Attribution Disputed by Affiliate
+                        </span>
+                      )}
+                      {ref.conversionStatus === 'not_converted' && (
                         <span
                           style={{
                             fontSize: '0.72rem',
@@ -571,11 +884,23 @@ export const ProviderHome: React.FC = () => {
                     {isConverted && (
                       <div style={{ textAlign: 'right', fontSize: '0.82rem' }}>
                         <span style={{ color: '#166534', fontWeight: 700, display: 'block' }}>
-                          ✓ Sale Cleared: ₹{(ref.saleValueRupees || offering?.customerPriceRupees || 2000).toLocaleString('en-IN')}
+                          ✓ Billed: ₹{(ref.actualBillAmount || ref.saleValueRupees || offering?.customerPriceRupees || 100).toLocaleString('en-IN')}
                         </span>
-                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                          Completed Customer
-                        </span>
+                        {ref.partnerInvoiceRef && (
+                          <span style={{ fontSize: '0.72rem', color: '#475569', display: 'block' }}>
+                            Ref: <strong>{ref.partnerInvoiceRef}</strong>
+                          </span>
+                        )}
+                        {ref.billProofUrl && (
+                          <a
+                            href={ref.billProofUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ fontSize: '0.72rem', color: 'var(--brand-cobalt)', fontWeight: 600, textDecoration: 'underline', display: 'block', marginTop: '2px' }}
+                          >
+                            📄 View Bill Receipt
+                          </a>
+                        )}
                       </div>
                     )}
                   </div>
@@ -584,180 +909,173 @@ export const ProviderHome: React.FC = () => {
             })}
           </div>
         )}
-      </section>
+      </div>
+    ) : (
+      <div>
+        {/* Invoices Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '20px' }}>
+              <div>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--brand-navy)', margin: 0 }}>
+                  Consolidated Monthly Invoices
+                </h2>
+                <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                  Monthly billing statements for platform referral fees ({activeProvider.commissionPercent || 30}% MoU). Cleared payments disburse rewards to affiliates.
+                </p>
+              </div>
 
-      {/* =========================================================================
-          SECTION 2 (NEXT OPTION): Add & Manage Services (Rate Card)
-      ========================================================================= */}
-      <section
-        style={{
-          borderTop: '1px solid var(--border-light)',
-          paddingTop: '28px'
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '12px',
-            marginBottom: '16px'
-          }}
-        >
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--brand-navy)', margin: 0 }}>
-                My Services & Pricing
-              </h2>
-              <span
-                style={{
-                  fontSize: '0.85rem',
-                  fontWeight: 800,
-                  backgroundColor: '#EFF6FF',
-                  color: 'var(--brand-cobalt)',
-                  padding: '2px 10px',
-                  borderRadius: '12px'
-                }}
-              >
-                {providerOfferings.length} Active
-              </span>
-            </div>
-            <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-              Services currently active and promoted by affiliate partners.
-            </p>
-          </div>
+              {/* Check for unbilled conversions */}
+              {(() => {
+                const unbilled = providerReferrals.filter(
+                  (r) =>
+                    (r.conversionStatus === 'converted_pending_clearance' || r.conversionStatus === 'converted') &&
+                    !r.providerInvoiceId
+                );
+                const mouPct = activeProvider.commissionPercent || activeProvider.activeAgreements?.[0]?.grossReferralPct || 30;
+                const unbilledTotal = unbilled.reduce((sum, r) => sum + (r.actualBillAmount || r.saleValueRupees || 100), 0);
+                const unbilledFee = Math.round(unbilledTotal * (mouPct / 100));
 
-          {/* Add Service Button */}
-          <button
-            id="btn-add-service-section"
-            type="button"
-            className="btn btn-primary"
-            onClick={() => setShowAddServiceModal(true)}
-            style={{
-              padding: '10px 18px',
-              fontSize: '0.86rem',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              borderRadius: '8px'
-            }}
-          >
-            <Plus size={16} />
-            <span>+ Add Service or Upload Price List</span>
-          </button>
-        </div>
+                if (unbilled.length === 0) return null;
 
-        {/* Services List / Grid */}
-        {providerOfferings.length === 0 ? (
-          <div
-            style={{
-              backgroundColor: '#F8FAFC',
-              border: '1.5px dashed #CBD5E1',
-              borderRadius: '12px',
-              padding: '36px 20px',
-              textAlign: 'center'
-            }}
-          >
-            <div
-              style={{
-                width: '54px',
-                height: '54px',
-                borderRadius: '50%',
-                backgroundColor: '#EFF6FF',
-                color: 'var(--brand-cobalt)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 14px'
-              }}
-            >
-              <Tag size={26} />
-            </div>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--brand-navy)', margin: '0 0 6px' }}>
-              No Services Added Yet
-            </h3>
-            <p style={{ fontSize: '0.84rem', color: 'var(--text-muted)', maxWidth: '440px', margin: '0 auto 16px' }}>
-              Upload a photo of your rate card / price menu or type in your packages. Affiliates will start recommending them immediately.
-            </p>
-            <button
-              onClick={() => setShowAddServiceModal(true)}
-              className="btn btn-primary"
-              style={{ padding: '9px 18px', fontWeight: 700 }}
-            >
-              <Camera size={16} />
-              <span>Snap / Upload Rate Card Photo</span>
-            </button>
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '14px' }}>
-            {providerOfferings.map((offering) => {
-              const leadRule = offering.rewardRules?.find((r) => r.eventType === 'qualified_lead');
-              const convRule = offering.rewardRules?.find((r) => r.eventType === 'successful_conversion');
-
-              return (
-                <div
-                  key={offering.id}
-                  style={{
-                    backgroundColor: '#FFFFFF',
-                    border: '1px solid var(--border-light)',
-                    borderRadius: '10px',
-                    padding: '18px 20px',
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    gap: '12px'
-                  }}
-                >
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px', marginBottom: '6px' }}>
-                      <strong style={{ fontSize: '0.98rem', color: 'var(--brand-navy)', lineHeight: 1.3 }}>
-                        {offering.title}
-                      </strong>
-                      <span
-                        style={{
-                          fontSize: '1.1rem',
-                          fontWeight: 800,
-                          color: 'var(--brand-navy)',
-                          whiteSpace: 'nowrap'
-                        }}
-                      >
-                        ₹{offering.customerPriceRupees.toLocaleString('en-IN')}
-                      </span>
-                    </div>
-
-                    <p style={{ margin: '0 0 10px', fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                      {offering.description || 'Verified commercial package.'}
-                    </p>
-
-                    <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
-                      <span>📍 Service Area: <strong>{offering.serviceArea || activeProvider.city}</strong></span>
-                    </div>
-                  </div>
-
-                  {/* Referral Split Info Strip */}
+                return (
                   <div
                     style={{
-                      backgroundColor: '#F8FAFC',
-                      padding: '8px 12px',
-                      borderRadius: '6px',
-                      border: '1px solid #E2E8F0',
-                      fontSize: '0.74rem',
+                      padding: '8px 14px',
+                      backgroundColor: '#FEF3C7',
+                      borderRadius: '8px',
+                      border: '1px solid #FCD34D',
+                      fontSize: '0.80rem',
+                      color: '#92400E',
                       display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center'
+                      alignItems: 'center',
+                      gap: '8px'
                     }}
                   >
-                    <span style={{ color: 'var(--text-muted)' }}>Affiliate Referral Reward:</span>
-                    <strong style={{ color: 'var(--finance-green)' }}>
-                      ₹{(convRule?.affiliateRewardRupees || leadRule?.affiliateRewardRupees || 500).toLocaleString('en-IN')}
-                    </strong>
+                    <Clock size={16} color="#D97706" />
+                    <span>
+                      <strong>{unbilled.length} recent customer visits</strong> recorded (₹{unbilledTotal.toLocaleString('en-IN')} total sales). Monthly statement for <strong>₹{unbilledFee.toLocaleString('en-IN')}</strong> ({mouPct}% MoU) will be issued by platform admin at billing cycle close.
+                    </span>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })()}
+            </div>
+
+            {/* List of Invoices */}
+            {providerMonthlyInvoices.filter((i) => i.providerId === activeProvider.id).length === 0 ? (
+              <div style={{ padding: '40px 20px', textAlign: 'center', backgroundColor: '#FFFFFF', borderRadius: '10px', border: '1px solid var(--border-light)' }}>
+                <FileText size={36} color="#94A3B8" style={{ margin: '0 auto 12px' }} />
+                <h4 style={{ fontSize: '1rem', color: 'var(--brand-navy)', marginBottom: '4px' }}>No Monthly Invoices Issued Yet</h4>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', maxWidth: '440px', margin: '0 auto' }}>
+                  When customer leads convert and have receipts uploaded, you can generate your consolidated statement at the end of each billing cycle.
+                </p>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {providerMonthlyInvoices
+                  .filter((i) => i.providerId === activeProvider.id)
+                  .map((inv) => (
+                    <div
+                      key={inv.id}
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: '10px',
+                        border: inv.status === 'unpaid' ? '1.5px solid #FCD34D' : '1px solid var(--border-light)',
+                        padding: '20px',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '14px' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <strong style={{ fontSize: '1.05rem', color: 'var(--brand-navy)' }}>
+                              {inv.invoiceNumber}
+                            </strong>
+                            {inv.status === 'unpaid' ? (
+                              <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', backgroundColor: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }}>
+                                🔴 PAYMENT DUE
+                              </span>
+                            ) : (
+                              <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', backgroundColor: '#DCFCE7', color: '#166534', border: '1px solid #86EFAC' }}>
+                                ✓ CLEARED & PAID
+                              </span>
+                            )}
+                          </div>
+                          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'block', marginTop: '2px' }}>
+                            Billing Month: <strong>{inv.billingMonth}</strong> • Issued: {new Date(inv.generatedAt).toLocaleDateString('en-IN')}
+                          </span>
+                        </div>
+
+                        <div style={{ textAlign: 'right' }}>
+                          <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', display: 'block' }}>
+                            Total Fee Owed ({inv.mouCommissionPercent}% MoU)
+                          </span>
+                          <span style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--brand-navy)' }}>
+                            ₹{inv.totalFeeOwedToPlatform.toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Itemized Table of Customers */}
+                      <div className="table-responsive" style={{ backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', marginBottom: '14px' }}>
+                        <table className="data-table" style={{ fontSize: '0.8rem', margin: 0 }}>
+                          <thead>
+                            <tr>
+                              <th>Customer Name</th>
+                              <th>Bill Reference</th>
+                              <th>Billed Amount</th>
+                              <th>MoU Fee ({inv.mouCommissionPercent}%)</th>
+                              <th>Receipt Photo</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {inv.items.map((item: ProviderMonthlyInvoiceItem) => (
+                              <tr key={item.referralId}>
+                                <td><strong>{item.customerName}</strong></td>
+                                <td><code>{item.invoiceRef || item.referralCode}</code></td>
+                                <td style={{ fontWeight: 600 }}>₹{item.billedAmount.toLocaleString('en-IN')}</td>
+                                <td style={{ fontWeight: 700, color: '#0A2540' }}>₹{item.providerFee.toLocaleString('en-IN')}</td>
+                                <td>
+                                  {item.billProofUrl ? (
+                                    <a href={item.billProofUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--brand-cobalt)', fontWeight: 600, textDecoration: 'underline' }}>
+                                      View Receipt
+                                    </a>
+                                  ) : (
+                                    <span style={{ color: '#94A3B8' }}>None</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Payment Action Bar */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                          Total Customer Sales Billed: <strong>₹{inv.totalPatientBilledAmount.toLocaleString('en-IN')}</strong> across <strong>{inv.totalBilledCustomers}</strong> customers.
+                        </div>
+
+                        {inv.status === 'unpaid' ? (
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            onClick={() => {
+                              setViewInvoiceModal(inv);
+                              setPaymentRefInput('');
+                            }}
+                            style={{ backgroundColor: 'var(--finance-green)', color: '#FFF', fontWeight: 700, padding: '7px 16px' }}
+                          >
+                            💳 Clear Statement / Enter UTR (₹{inv.totalFeeOwedToPlatform})
+                          </button>
+                        ) : (
+                          <div style={{ fontSize: '0.78rem', color: '#166534', fontWeight: 600 }}>
+                            Paid on {inv.paidAt ? new Date(inv.paidAt).toLocaleDateString('en-IN') : 'Confirmed'} • Ref: {inv.paymentReference || 'UTR-CLEARED'}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
           </div>
         )}
       </section>
@@ -859,24 +1177,103 @@ export const ProviderHome: React.FC = () => {
                       <input
                         type="text"
                         className="form-input"
-                        placeholder="INV-2026-081"
+                        placeholder="e.g. BILL-1049"
                         value={invoiceRefInput}
                         onChange={(e) => setInvoiceRefInput(e.target.value)}
                       />
                     </div>
+                    <div className="form-group" style={{ marginBottom: '12px' }}>
+                      <label className="form-label" style={{ fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>Upload Bill / Cash Memo Photo <span className="required">*</span></span>
+                        {isAnalyzingBill && (
+                          <span style={{ fontSize: '0.72rem', color: 'var(--brand-cobalt)', display: 'inline-flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                            <Sparkles size={12} /> Claude AI Analyzing Receipt...
+                          </span>
+                        )}
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        className="form-input"
+                        style={{ fontSize: '0.78rem', padding: '6px' }}
+                        onChange={handleBillFileChange}
+                      />
+
+                      {/* AI Verification Extract Banner */}
+                      {claudeScanFeedback && (
+                        <div style={{
+                          marginTop: '8px',
+                          padding: '8px 10px',
+                          backgroundColor: '#EFF6FF',
+                          borderRadius: '6px',
+                          border: '1px solid #BFDBFE',
+                          fontSize: '0.76rem',
+                          color: '#1E40AF',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: '6px'
+                        }}>
+                          <Sparkles size={14} style={{ marginTop: '2px', flexShrink: 0, color: 'var(--brand-cobalt)' }} />
+                          <div>{claudeScanFeedback}</div>
+                        </div>
+                      )}
+
+                      {billProofPreview && (
+                        <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <img src={billProofPreview} alt="Receipt Preview" style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #CBD5E1' }} />
+                          <div>
+                            <span style={{ fontSize: '0.74rem', color: '#16A34A', fontWeight: 700, display: 'block' }}>
+                              ✓ Receipt attached & ready
+                            </span>
+                            <span style={{ fontSize: '0.70rem', color: '#64748B' }}>
+                              Saved to Supabase storage bucket 'provider-bills' upon submit
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    {/* Live Calculation Preview */}
+                    {(() => {
+                      const mouPct = activeProvider?.commissionPercent || activeProvider?.activeAgreements?.[0]?.grossReferralPct || 30;
+                      const bill = parseFloat(saleValueInput) || 0;
+                      const fee = Math.round(bill * (mouPct / 100));
+                      return (
+                        <div style={{ padding: '8px 12px', backgroundColor: '#F0FDF4', borderRadius: '6px', border: '1px solid #BBF7D0', fontSize: '0.78rem', color: '#166534', marginBottom: '12px' }}>
+                          <div>💰 <strong>Billed: ₹{bill.toLocaleString('en-IN')}</strong></div>
+                          <div>🤝 <strong>Platform MoU Fee ({mouPct}%): ₹{fee.toLocaleString('en-IN')}</strong></div>
+                          <span style={{ fontSize: '0.7rem', color: '#15803D' }}>Included in your consolidated month-end invoice</span>
+                        </div>
+                      );
+                    })()}
                   </>
                 ) : (
-                  <div className="form-group" style={{ marginBottom: '12px' }}>
-                    <label className="form-label" style={{ fontSize: '0.8rem' }}>Reason for not converting</label>
-                    <textarea
-                      className="form-textarea"
-                      rows={2}
-                      placeholder="e.g. Customer decided not to proceed / service not required."
-                      value={actionNotes}
-                      onChange={(e) => setActionNotes(e.target.value)}
-                      required
-                    />
-                  </div>
+                  <>
+                    <div className="form-group" style={{ marginBottom: '12px' }}>
+                      <label className="form-label" style={{ fontSize: '0.8rem' }}>Reason for not converting</label>
+                      <select
+                        className="form-select"
+                        value={rejectionReasonInput}
+                        onChange={(e) => setRejectionReasonInput(e.target.value)}
+                        style={{ fontSize: '0.82rem', marginBottom: '8px' }}
+                      >
+                        <option value="Customer cancelled / did not visit">Customer cancelled / did not visit</option>
+                        <option value="Pricing was too high / customer declined">Pricing was too high / customer declined</option>
+                        <option value="Customer visited another provider">Customer visited another provider</option>
+                        <option value="Wrong contact details / unreachable">Wrong contact details / unreachable</option>
+                        <option value="Other">Other</option>
+                      </select>
+                      <textarea
+                        className="form-textarea"
+                        rows={2}
+                        placeholder="Additional details / notes..."
+                        value={actionNotes}
+                        onChange={(e) => setActionNotes(e.target.value)}
+                      />
+                    </div>
+                    <div style={{ padding: '8px 12px', backgroundColor: '#FEF2F2', borderRadius: '6px', border: '1px solid #FECACA', fontSize: '0.75rem', color: '#991B1B' }}>
+                      ⚠️ <strong>7-Day Review Active:</strong> The affiliate has 7 days to review and dispute if the customer visited.
+                    </div>
+                  </>
                 )}
               </div>
 
@@ -902,10 +1299,87 @@ export const ProviderHome: React.FC = () => {
       )}
 
       {/* =========================================================================
-          MODAL 3: Add Services Modal (Camera OCR or Manual)
+          MODAL 4: Pay Monthly Invoice Dialog
+      ========================================================================= */}
+      {viewInvoiceModal && (
+        <div className="modal-backdrop">
+          <div className="modal-content" style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ fontSize: '1.05rem', margin: 0 }}>
+                Clear Monthly Invoice: {viewInvoiceModal.invoiceNumber}
+              </h3>
+              <button className="modal-close-btn" onClick={() => setViewInvoiceModal(null)}>✕</button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                markProviderMonthlyInvoicePaid(viewInvoiceModal.id, paymentRefInput || `UTR-${Date.now().toString().slice(-6)}`);
+                showNotification(`Invoice ${viewInvoiceModal.invoiceNumber} (₹${viewInvoiceModal.totalFeeOwedToPlatform}) marked as PAID! Affiliate rewards unlocked.`, 'success');
+                setViewInvoiceModal(null);
+                setPaymentRefInput('');
+              }}
+            >
+              <div className="modal-body" style={{ padding: '18px 20px' }}>
+                <div style={{ padding: '12px 14px', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '0.82rem', color: '#64748B' }}>Billing Month:</span>
+                    <strong style={{ fontSize: '0.84rem', color: '#0A2540' }}>{viewInvoiceModal.billingMonth}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '0.82rem', color: '#64748B' }}>Total Customer Bills:</span>
+                    <strong style={{ fontSize: '0.84rem', color: '#0A2540' }}>₹{viewInvoiceModal.totalPatientBilledAmount.toLocaleString('en-IN')}</strong>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #E2E8F0', paddingTop: '6px' }}>
+                    <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#0A2540' }}>Total Fee Due ({viewInvoiceModal.mouCommissionPercent}% MoU):</span>
+                    <strong style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--brand-cobalt)' }}>₹{viewInvoiceModal.totalFeeOwedToPlatform.toLocaleString('en-IN')}</strong>
+                  </div>
+                </div>
+
+                <div style={{ padding: '10px 14px', backgroundColor: '#EFF6FF', borderRadius: '8px', border: '1px solid #BFDBFE', fontSize: '0.78rem', color: '#1E40AF', marginBottom: '16px' }}>
+                  <div>🏦 <strong>Platform Settlement Account (sBLOOM):</strong></div>
+                  <div>UPI VPA: <code>academy@ottobon.in</code></div>
+                  <div>Account: <strong>Ottobon Professional Services</strong></div>
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '12px' }}>
+                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Bank / UPI UTR Transaction Reference <span className="required">*</span></label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="e.g. UTR-432890128912 or UPI Ref"
+                    value={paymentRefInput}
+                    onChange={(e) => setPaymentRefInput(e.target.value)}
+                    required
+                  />
+                  <span style={{ fontSize: '0.72rem', color: '#64748B', display: 'block', marginTop: '4px' }}>
+                    Enter transaction ID from your banking or UPI app after transferring the fee.
+                  </span>
+                </div>
+              </div>
+
+              <div className="modal-footer" style={{ borderTop: '1px solid var(--border-light)' }}>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setViewInvoiceModal(null)}>
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-sm"
+                  style={{ backgroundColor: 'var(--finance-green)', color: '#FFF', fontWeight: 700 }}
+                >
+                  ✓ Confirm Payment & Clear Invoice
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* =========================================================================
+          MODAL 3: Add Services Modal (Excel Rate Card / Camera OCR / Manual)
       ========================================================================= */}
       {showAddServiceModal && (
-        <AddServicesModal onClose={() => setShowAddServiceModal(false)} />
+        <AddServicesModal onClose={() => setShowAddServiceModal(false)} initialTab={modalInitialTab} />
       )}
     </div>
   );

@@ -17,11 +17,20 @@ import {
 
 import { Referral, ReferralStatusHistory } from '../../types';
 
-export const ReferralsList: React.FC = () => {
-  const { referrals, offerings, providers, commissionLedger } = useData();
-  const { setActiveTab } = useApp();
+interface ReferralsListProps {
+  onNewReferral?: () => void;
+}
+
+export const ReferralsList: React.FC<ReferralsListProps> = ({ onNewReferral }) => {
+  const { referrals, offerings, providers, commissionLedger, raiseDispute } = useData();
+  const { setActiveTab, showNotification } = useApp();
 
   const [selectedTimelineRef, setSelectedTimelineRef] = useState<Referral | null>(null);
+  const [disputeReferral, setDisputeReferral] = useState<Referral | null>(null);
+  const [disputeNotes, setDisputeNotes] = useState('');
+  const [disputeProofPreview, setDisputeProofPreview] = useState<string | null>(null);
+  const [disputeClaimedBill, setDisputeClaimedBill] = useState('');
+
   const [searchQuery, setSearchQuery] = useState('');
   const [filterModel, setFilterModel] = useState<'all' | 'lead_generation' | 'lead_conversion'>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -65,7 +74,13 @@ export const ReferralsList: React.FC = () => {
         </div>
         <button
           className="btn btn-primary"
-          onClick={() => setActiveTab('browse_services')}
+          onClick={() => {
+            if (onNewReferral) {
+              onNewReferral();
+            } else {
+              setActiveTab('affiliate_dashboard');
+            }
+          }}
         >
           <Send size={15} />
           <span>+ New Referral</span>
@@ -197,13 +212,19 @@ export const ReferralsList: React.FC = () => {
                     (ref.earningModel === 'lead_generation' ? 'qualified_lead' : 'successful_conversion')
                 );
 
-                const rewardAmount = commission
-                  ? commission.affiliateRewardSnapshot
-                  : rule?.affiliateRewardRupees || 0;
-
                 const isLeadGen = ref.earningModel === 'lead_generation';
                 const isQualified = ref.leadStatus === 'qualified';
-                const isConverted = ref.conversionStatus === 'converted';
+                const isConverted =
+                  ref.conversionStatus === 'converted' ||
+                  ref.conversionStatus === 'converted_pending_clearance' ||
+                  ref.conversionStatus === 'cleared_ready_for_payout' ||
+                  ref.conversionStatus === 'paid_and_settled';
+
+                const rewardAmount =
+                  ref.affiliateRewardCalculated ||
+                  (commission
+                    ? commission.affiliateRewardSnapshot
+                    : rule?.affiliateRewardRupees || 0);
 
                 return (
                   <tr key={ref.id}>
@@ -323,18 +344,84 @@ export const ReferralsList: React.FC = () => {
                               <Clock size={12} /> Provider Contacting Lead
                             </span>
                           )
+                        ) : ref.conversionStatus === 'converted_pending_clearance' ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            <span className="badge" style={{ backgroundColor: '#FEF3C7', color: '#92400E', border: '1px solid #FCD34D' }}>
+                              ⏳ Converted • Awaiting Provider Invoice Clearance
+                            </span>
+                            <span style={{ fontSize: '0.70rem', color: '#64748B' }}>
+                              Bill: ₹{ref.actualBillAmount || ref.saleValueRupees || 100} • Your Reward: ₹{rewardAmount}
+                            </span>
+                          </div>
+                        ) : ref.conversionStatus === 'cleared_ready_for_payout' ? (
+                          <span className="badge" style={{ backgroundColor: '#DCFCE7', color: '#166534', border: '1px solid #86EFAC' }}>
+                            💰 Provider Cleared • Queued for Bulk Payout
+                          </span>
+                        ) : ref.conversionStatus === 'paid_and_settled' ? (
+                          <span className="badge badge-success">
+                            <CheckCircle2 size={12} /> Paid & Disbursed
+                          </span>
+                        ) : ref.conversionStatus === 'review_cooling_off' ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <span className="badge" style={{ backgroundColor: '#FEE2E2', color: '#991B1B', border: '1px solid #FCA5A5' }}>
+                              <AlertCircle size={12} /> Marked Lost: {ref.rejectionReason || 'No-Show'} (7-Day Review Active)
+                            </span>
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                              <a
+                                href={`https://wa.me/91${ref.customerPhone.replace(/[^0-9]/g, '').slice(-10)}?text=${encodeURIComponent(`Hi ${ref.customerName}, hope you are doing well! Did you get a chance to visit ${provider?.businessName}? Let me know your feedback!`)}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="btn btn-outline btn-sm"
+                                style={{ fontSize: '0.72rem', padding: '3px 8px', color: '#16A34A', borderColor: '#86EFAC' }}
+                              >
+                                💬 Check on WhatsApp
+                              </a>
+                              <button
+                                type="button"
+                                className="btn btn-sm"
+                                style={{ fontSize: '0.72rem', padding: '3px 8px', backgroundColor: '#DC2626', color: '#FFF' }}
+                                onClick={() => {
+                                  setDisputeReferral(ref);
+                                  setDisputeClaimedBill((ref.actualBillAmount || 100).toString());
+                                  setDisputeNotes('');
+                                  setDisputeProofPreview(null);
+                                }}
+                              >
+                                🚨 Raise Dispute
+                              </button>
+                            </div>
+                          </div>
+                        ) : ref.conversionStatus === 'disputed' ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <span className="badge" style={{ backgroundColor: '#FEF2F2', color: '#B91C1C', border: '1px solid #F87171' }}>
+                              🚨 Dispute Raised • Admin Reviewing Proof
+                            </span>
+                            <span style={{ fontSize: '0.70rem', color: '#991B1B' }}>
+                              2x Penalty clause active if provider false rejection is confirmed.
+                            </span>
+                          </div>
                         ) : isConverted ? (
                           <span className="badge badge-success">
                             <CheckCircle2 size={12} /> Sale Closed & Verified
                           </span>
                         ) : ref.conversionStatus === 'not_converted' ? (
                           <span className="badge badge-rejected">
-                            <AlertCircle size={12} /> Not Converted
+                            <AlertCircle size={12} /> Closed / Not Converted
                           </span>
                         ) : (
-                          <span className="badge badge-pending">
-                            <Clock size={12} /> Sales Discussions in Progress
-                          </span>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <span className="badge badge-pending">
+                              <Clock size={12} /> Sales Discussions in Progress
+                            </span>
+                            <a
+                              href={`https://wa.me/91${ref.customerPhone.replace(/[^0-9]/g, '').slice(-10)}?text=${encodeURIComponent(`Hi ${ref.customerName}, following up regarding ${offering?.title || 'your request'} with ${provider?.businessName}. Let me know if you need any assistance!`)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ fontSize: '0.72rem', color: '#16A34A', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            >
+                              💬 Message Customer (WhatsApp)
+                            </a>
+                          </div>
                         )}
 
                         {ref.qualificationNotes && (
@@ -474,6 +561,95 @@ export const ReferralsList: React.FC = () => {
                 Close Timeline
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Dispute Modal for Venu / Affiliate */}
+      {disputeReferral && (
+        <div className="modal-backdrop">
+          <div className="modal-content" style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title" style={{ fontSize: '1.05rem', margin: 0, color: '#B91C1C' }}>
+                🚨 Raise Attribution Dispute: {disputeReferral.referralCode}
+              </h3>
+              <button className="modal-close-btn" onClick={() => setDisputeReferral(null)}>✕</button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                raiseDispute(disputeReferral.id, disputeNotes, disputeProofPreview || undefined);
+                showNotification(`Dispute raised for ${disputeReferral.customerName}! Admin & provider notified.`, 'success');
+                setDisputeReferral(null);
+              }}
+            >
+              <div className="modal-body" style={{ padding: '18px 20px' }}>
+                <div style={{ padding: '10px 14px', backgroundColor: '#FEF2F2', borderRadius: '8px', border: '1px solid #FECACA', fontSize: '0.8rem', color: '#991B1B', marginBottom: '14px' }}>
+                  <strong>2× Penalty Deterrent Active:</strong> If the provider falsely rejected this customer who actually visited and purchased, the provider will be charged <strong>2× the referral fee</strong>, with bonus compensation credited to you!
+                </div>
+
+                <div style={{ fontSize: '0.84rem', marginBottom: '12px' }}>
+                  Customer: <strong>{disputeReferral.customerName}</strong> (📞 {disputeReferral.customerPhone})
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '12px' }}>
+                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Actual Bill Amount Told by Customer (₹)</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    value={disputeClaimedBill}
+                    onChange={(e) => setDisputeClaimedBill(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '12px' }}>
+                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Dispute Details / What Customer Confirmed <span className="required">*</span></label>
+                  <textarea
+                    className="form-textarea"
+                    rows={3}
+                    placeholder="e.g. Spoke to Kusuma yesterday. She visited on 12th Nov, took items and paid ₹100. She shared confirmation."
+                    value={disputeNotes}
+                    onChange={(e) => setDisputeNotes(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '12px' }}>
+                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Upload Proof Screenshot / Photo (Chat / Report)</label>
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    className="form-input"
+                    style={{ fontSize: '0.78rem', padding: '6px' }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = () => setDisputeProofPreview(reader.result as string);
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                  {disputeProofPreview && (
+                    <div style={{ marginTop: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <img src={disputeProofPreview} alt="Proof" style={{ width: '40px', height: '40px', objectFit: 'cover', borderRadius: '4px', border: '1px solid #CBD5E1' }} />
+                      <span style={{ fontSize: '0.74rem', color: '#16A34A', fontWeight: 600 }}>✓ Evidence attached</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="modal-footer" style={{ borderTop: '1px solid var(--border-light)' }}>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setDisputeReferral(null)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-sm" style={{ backgroundColor: '#DC2626', color: '#FFF', fontWeight: 700 }}>
+                  🚨 Submit Dispute
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

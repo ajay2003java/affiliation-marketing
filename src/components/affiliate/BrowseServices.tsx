@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ProviderOffering } from '../../types';
+import { ProviderOffering, getProviderSector } from '../../types';
 import { useData } from '../../context/DataContext';
 import { useApp } from '../../context/AppContext';
 import {
@@ -14,7 +14,10 @@ import {
   Zap,
   TrendingUp,
   Filter,
-  ArrowUpDown
+  ArrowUpDown,
+  HeartPulse,
+  GraduationCap,
+  Building2
 } from 'lucide-react';
 import { ReferralModal } from './ReferralModal';
 import { OfferingDetailModal } from './OfferingDetailModal';
@@ -40,18 +43,40 @@ export const BrowseServices: React.FC = () => {
     const provider = providers.find((p) => p.id === offering.providerId);
     const service = services.find((s) => s.id === offering.serviceId);
 
-    // Category match
-    if (selectedCategory !== 'all' && offering.categoryId !== selectedCategory) {
-      return false;
+    // Sector & Category match
+    if (selectedCategory !== 'all') {
+      const provSector = provider ? getProviderSector(provider) : 'healthcare';
+      if (selectedCategory === 'healthcare' || selectedCategory === 'cat_health') {
+        if (provSector !== 'healthcare' && offering.categoryId !== 'cat_health') return false;
+      } else if (selectedCategory === 'education' || selectedCategory === 'cat_education') {
+        if (provSector !== 'education' && offering.categoryId !== 'cat_education') return false;
+      } else if (selectedCategory === 'corporate' || selectedCategory === 'cat_corp') {
+        if (provSector !== 'corporate' && offering.categoryId !== 'cat_corp') return false;
+      } else if (offering.categoryId !== selectedCategory) {
+        return false;
+      }
     }
 
     // Location match
     if (selectedLocation !== 'all') {
-      const matchCity =
-        offering.serviceArea.toLowerCase().includes(selectedLocation.toLowerCase()) ||
-        provider?.city.toLowerCase().includes(selectedLocation.toLowerCase()) ||
-        offering.serviceArea.toLowerCase().includes('pan-india') ||
-        offering.serviceArea.toLowerCase().includes('remote');
+      const loc = selectedLocation.toLowerCase();
+      const areaKeywords: Record<string, string[]> = {
+        hyderabad: ['hyderabad', 'telangana'],
+        secunderabad: ['secunderabad', 'marredpally', 'tarnaka'],
+        'hitec city / madhapur': ['hitec', 'madhapur', 'cyber', 'kondapur'],
+        gachibowli: ['gachibowli', 'financial district', 'nanakramguda', 'rayadurg'],
+        kukatpally: ['kukatpally', 'kphb', 'ameerpet', 'miyapur', 'nizampet'],
+        'jubilee hills': ['jubilee', 'banjara', 'film nagar']
+      };
+      const matchedKeywords = areaKeywords[loc] || [loc];
+      const haystacks = [
+        offering.serviceArea,
+        provider?.city || '',
+        provider?.address || '',
+        ...(provider?.serviceAreas || [])
+      ].map((s) => s.toLowerCase());
+
+      const matchCity = matchedKeywords.some((kw) => haystacks.some((h) => h.includes(kw)));
       if (!matchCity) return false;
     }
 
@@ -146,7 +171,7 @@ export const BrowseServices: React.FC = () => {
         </div>
 
         {/* Location selector */}
-        <div style={{ minWidth: '160px' }}>
+        <div style={{ minWidth: '180px' }}>
           <select
             className="form-select"
             value={selectedLocation}
@@ -154,8 +179,11 @@ export const BrowseServices: React.FC = () => {
           >
             <option value="all">📍 All Locations</option>
             <option value="hyderabad">Hyderabad</option>
-            <option value="visakhapatnam">Visakhapatnam</option>
-            <option value="pan-india">Pan-India / Remote</option>
+            <option value="secunderabad">Secunderabad</option>
+            <option value="hitec city / madhapur">Hitec City / Madhapur</option>
+            <option value="gachibowli">Gachibowli</option>
+            <option value="kukatpally">Kukatpally</option>
+            <option value="jubilee hills">Jubilee Hills</option>
           </select>
         </div>
 
@@ -173,26 +201,32 @@ export const BrowseServices: React.FC = () => {
         </div>
       </div>
 
-      {/* Category Pills */}
+      {/* Category & Sector Pills */}
       <div className="category-pills" style={{ marginBottom: '24px' }}>
         <button
           className={`category-pill ${selectedCategory === 'all' ? 'active' : ''}`}
           onClick={() => setSelectedCategory('all')}
         >
-          All Categories ({activeOfferings.length})
+          All Sectors ({activeOfferings.length})
         </button>
-        {categories.map((cat) => {
-          const count = activeOfferings.filter((o) => o.categoryId === cat.id).length;
-          return (
-            <button
-              key={cat.id}
-              className={`category-pill ${selectedCategory === cat.id ? 'active' : ''}`}
-              onClick={() => setSelectedCategory(cat.id)}
-            >
-              {cat.name} ({count})
-            </button>
-          );
-        })}
+        <button
+          className={`category-pill ${selectedCategory === 'healthcare' ? 'active' : ''}`}
+          onClick={() => setSelectedCategory('healthcare')}
+        >
+          🏥 Healthcare & Diagnostics
+        </button>
+        <button
+          className={`category-pill ${selectedCategory === 'education' ? 'active' : ''}`}
+          onClick={() => setSelectedCategory('education')}
+        >
+          🎓 Educational Institutes
+        </button>
+        <button
+          className={`category-pill ${selectedCategory === 'corporate' ? 'active' : ''}`}
+          onClick={() => setSelectedCategory('corporate')}
+        >
+          💼 Corporate Services
+        </button>
       </div>
 
       {/* Results Count Banner */}

@@ -17,6 +17,9 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_CLAUDE_API_KEY': JSON.stringify(claudeKey),
       'import.meta.env.claude_api_key': JSON.stringify(claudeKey)
     },
+    optimizeDeps: {
+      include: ['xlsx']
+    },
     server: {
       host: true,
       port: 5173

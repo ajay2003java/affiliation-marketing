@@ -5,7 +5,7 @@ import { CommissionLedgerEntry } from '../../types';
 import { Wallet, Send, ShieldCheck, CheckCircle2, RotateCcw, X } from 'lucide-react';
 
 export const CommissionLedgerView: React.FC = () => {
-  const { commissionLedger, payouts, createPayout, createAdjustmentEntry } = useData();
+  const { commissionLedger, payouts, createPayout, createAdjustmentEntry, executeBulkAffiliatePayout } = useData();
   const { showNotification } = useApp();
 
   const [payoutModal, setPayoutModal] = useState<CommissionLedgerEntry | null>(null);
@@ -63,6 +63,74 @@ export const CommissionLedgerView: React.FC = () => {
           Auditable multi-party ledger. Tracks provider fee collections, platform retained margins, and affiliate bank transfers.
         </p>
       </div>
+
+      {/* Bulk Payout Action Card for Admin */}
+      {(() => {
+        const approvedEntries = commissionLedger.filter((c) => c.status === 'approved');
+        const totalApprovedAmount = approvedEntries.reduce((sum, c) => sum + c.affiliateRewardSnapshot, 0);
+        const uniqueAffiliatesCount = new Set(approvedEntries.map((c) => c.affiliateId)).size;
+
+        return (
+          <div
+            style={{
+              padding: '18px 22px',
+              backgroundColor: '#F8FAFC',
+              borderRadius: '10px',
+              border: '1.5px solid #CBD5E1',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '14px',
+              marginBottom: '24px'
+            }}
+          >
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.74rem', fontWeight: 800, textTransform: 'uppercase', color: '#1E40AF', backgroundColor: '#EFF6FF', padding: '3px 8px', borderRadius: '4px' }}>
+                  Bulk Disbursement Engine
+                </span>
+                <strong style={{ fontSize: '1.05rem', color: 'var(--brand-navy)' }}>
+                  Affiliate Rewards Cleared & Ready for Payout
+                </strong>
+              </div>
+              <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#64748B' }}>
+                Provider monthly invoices have been cleared. Disburse approved commissions to affiliates in a single bulk batch.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: '0.74rem', color: '#64748B', display: 'block' }}>
+                  Total Batch Payable ({uniqueAffiliatesCount} Affiliates)
+                </span>
+                <span style={{ fontSize: '1.4rem', fontWeight: 800, color: '#166534' }}>
+                  ₹{totalApprovedAmount.toLocaleString('en-IN')}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={approvedEntries.length === 0}
+                onClick={() => {
+                  const res = executeBulkAffiliatePayout();
+                  showNotification(`Disbursed ₹${res.totalAmount.toLocaleString('en-IN')} across ${res.count} commissions to affiliates!`, 'success');
+                }}
+                style={{
+                  backgroundColor: approvedEntries.length > 0 ? 'var(--finance-green)' : '#94A3B8',
+                  borderColor: approvedEntries.length > 0 ? 'var(--finance-green)' : '#94A3B8',
+                  padding: '10px 20px',
+                  fontWeight: 700,
+                  fontSize: '0.88rem'
+                }}
+              >
+                ⚡ Execute Bulk Payout ({approvedEntries.length})
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       <div style={{ marginBottom: '32px' }}>
         <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--brand-navy)', marginBottom: '14px' }}>

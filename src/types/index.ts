@@ -9,7 +9,16 @@ export type OfferingStatus = 'draft' | 'pending_review' | 'active' | 'paused' | 
 export type ProviderStatus = 'pending_verification' | 'active' | 'suspended';
 
 export type LeadStatus = 'submitted' | 'provider_acknowledged' | 'qualification_pending' | 'qualified' | 'qualification_rejected';
-export type ConversionStatus = 'not_applicable' | 'follow_up_in_progress' | 'converted' | 'not_converted';
+export type ConversionStatus =
+  | 'not_applicable'
+  | 'follow_up_in_progress'
+  | 'converted'
+  | 'not_converted'
+  | 'converted_pending_clearance'
+  | 'cleared_ready_for_payout'
+  | 'paid_and_settled'
+  | 'review_cooling_off'
+  | 'disputed';
 
 export type CommissionEventType = 'qualified_lead' | 'successful_conversion';
 export type CommissionStatus = 'pending' | 'approved' | 'paid' | 'adjusted' | 'reversed';
@@ -22,6 +31,7 @@ export interface User {
   role: UserRole;
   avatarUrl?: string;
   phone?: string;
+  city?: string;
   providerId?: string; // Binds provider users to their specific business tenant
   password?: string;
 }
@@ -50,6 +60,7 @@ export interface AffiliateProfile {
   networkTypes: string[];
   interests: string[];
   preferredArea: string;
+  city?: string;
   totalEarnedRupees: number;
   pendingRewardRupees: number;
   referralCount: number;
@@ -67,6 +78,9 @@ export interface ProviderAgreement {
   status: 'active' | 'pending_signature' | 'expired';
   effectiveDate: string;
   expiryDate?: string;
+  grossReferralPct?: number; // e.g. 40.0 for 40% on MRP
+  affiliateSplitPct?: number;
+  companySplitPct?: number;
   notes?: string;
 }
 
@@ -87,6 +101,50 @@ export interface Provider {
   activeAgreements: ProviderAgreement[];
   description: string;
   amountPaidRupees?: number; // Total amount this client has paid our company
+  commissionPercent?: number; // MoU agreed percentage, e.g. 40 for 40% on MRP
+  category?: 'healthcare' | 'education' | 'corporate' | string;
+}
+
+export function getProviderSector(provider: {
+  businessName?: string;
+  tagline?: string;
+  description?: string;
+  category?: string;
+}): 'healthcare' | 'education' | 'corporate' {
+  if (provider.category) {
+    const c = provider.category.toLowerCase();
+    if (c.includes('health') || c.includes('diag') || c.includes('clinic') || c.includes('medic') || c.includes('dental')) return 'healthcare';
+    if (c.includes('edu') || c.includes('acad') || c.includes('school') || c.includes('college') || c.includes('train')) return 'education';
+    return 'corporate';
+  }
+  const text = `${provider.businessName || ''} ${provider.tagline || ''} ${provider.description || ''}`.toLowerCase();
+  if (
+    text.includes('diagnostic') ||
+    text.includes('laboratory') ||
+    text.includes('clinic') ||
+    text.includes('hospital') ||
+    text.includes('health') ||
+    text.includes('pathology') ||
+    text.includes('dental') ||
+    text.includes('medical') ||
+    text.includes('scan') ||
+    text.includes('checkup')
+  ) {
+    return 'healthcare';
+  }
+  if (
+    text.includes('academy') ||
+    text.includes('institute') ||
+    text.includes('school') ||
+    text.includes('college') ||
+    text.includes('education') ||
+    text.includes('coaching') ||
+    text.includes('training') ||
+    text.includes('university')
+  ) {
+    return 'education';
+  }
+  return 'corporate';
 }
 
 export interface ServiceCategory {
@@ -155,20 +213,66 @@ export interface Referral {
   authorizationConfirmed: boolean;
   consentStatus?: 'awaiting_consent' | 'consent_given' | 'declined';
   
-  // Status tracking & Anti-Leakage
+  // Status tracking, Billing & Anti-Leakage
   leadStatus: LeadStatus;
   conversionStatus: ConversionStatus;
   qualificationNotes?: string;
   rejectionReason?: string;
+  rejectedAt?: string;
   conversionNotes?: string;
   saleValueRupees?: number;
+  actualBillAmount?: number;
   finalAgreedPrice?: number;
   partnerInvoiceRef?: string;
+  billProofUrl?: string;
+  disputeNotes?: string;
+  disputeProofUrl?: string;
+  disputedAt?: string;
+  providerInvoiceId?: string;
+  providerFeeCalculated?: number;
+  affiliateRewardCalculated?: number;
+  platformMarginCalculated?: number;
   statusHistory?: ReferralStatusHistory[];
   callLogs?: CallLogEntry[];
   
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ProviderMonthlyInvoiceItem {
+  referralId: string;
+  referralCode: string;
+  customerName: string;
+  affiliateId: string;
+  affiliateName: string;
+  billedAmount: number;
+  providerFee: number;
+  affiliateShare: number;
+  platformRetained: number;
+  invoiceRef?: string;
+  billProofUrl?: string;
+  convertedAt: string;
+}
+
+export interface ProviderMonthlyInvoice {
+  id: string;
+  invoiceNumber: string;            // e.g. "INV-AJAY-2026-11"
+  providerId: string;
+  providerBusinessName: string;
+  billingMonth: string;             // e.g. "November 2026"
+  billingYear: number;              // 2026
+  totalBilledCustomers: number;     // e.g. 2
+  totalPatientBilledAmount: number; // e.g. ₹140 (₹100 + ₹40)
+  mouCommissionPercent: number;     // e.g. 30%
+  totalFeeOwedToPlatform: number;   // e.g. ₹42 (30% of ₹140)
+  affiliateShareTotal: number;      // e.g. ₹21 (50% of ₹42)
+  platformRetainedTotal: number;    // e.g. ₹21 (50% of ₹42)
+  status: 'unpaid' | 'paid';
+  generatedAt: string;
+  paidAt?: string;
+  paymentReference?: string;        // UTR / Transaction ID
+  referralIds: string[];
+  items: ProviderMonthlyInvoiceItem[];
 }
 
 export interface ReferralStatusHistory {
@@ -242,7 +346,7 @@ export interface AuditEvent {
   actorName: string;
   actorRole: UserRole;
   action: string;
-  entityType: 'offering' | 'provider' | 'referral' | 'commission' | 'payout' | 'user';
+  entityType: 'offering' | 'provider' | 'referral' | 'commission' | 'payout' | 'user' | 'invoice';
   entityId: string;
   details: string;
   timestamp: string;

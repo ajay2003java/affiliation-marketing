@@ -15,14 +15,18 @@ import {
   Image as ImageIcon,
   Check,
   ClipboardList,
-  Utensils
+  Utensils,
+  FileSpreadsheet,
+  Download
 } from 'lucide-react';
 import { uploadRateCardImage, syncOfferingToSupabase } from '../../services/supabaseClient';
 import { extractRawTextFromMouFile } from '../../services/mouParser';
-import { scanRateCardWithClaude, isClaudeConfigured } from '../../services/aiRateCardScanner';
+import { scanRateCardWithClaude, scanExcelWithClaude, isClaudeConfigured } from '../../services/aiRateCardScanner';
+import { parseExcelRateCard, downloadSampleRateCardTemplate } from '../../services/excelRateCardParser';
 
 interface AddServicesModalProps {
   onClose: () => void;
+  initialTab?: 'upload' | 'manual';
 }
 
 interface ExtractedItem {
@@ -36,7 +40,7 @@ interface ExtractedItem {
   description: string;
 }
 
-export const AddServicesModal: React.FC<AddServicesModalProps> = ({ onClose }) => {
+export const AddServicesModal: React.FC<AddServicesModalProps> = ({ onClose, initialTab }) => {
   const { categories, createOffering, providers } = useData();
   const { activeProviderId, showNotification } = useApp();
 
@@ -74,16 +78,25 @@ export const AddServicesModal: React.FC<AddServicesModalProps> = ({ onClose }) =
     ? (categories.find((c) => c.id === 'cat_food')?.id || 'cat_food')
     : (categories.find((c) => c.id === 'cat_corp')?.id || categories[0]?.id || 'cat_health');
 
-  // Active Tab: 'photo' (Snap/Upload Rate Card) vs 'paste' (Quick Text Menu) vs 'manual' (Enter One by One)
-  const [activeTab, setActiveTab] = useState<'photo' | 'paste' | 'manual'>('photo');
+  // Active Provider's Onboarded MoU Commission / Referral Percentage (e.g. 40% for SMS Diagnostics)
+  const agreedMouPct: number =
+    activeProvider?.commissionPercent ||
+    activeProvider?.activeAgreements?.[0]?.grossReferralPct ||
+    40;
+  const leadPct: number = Math.min(10, Math.round(agreedMouPct * 0.25)); // e.g. 10%
+  const convPct: number = agreedMouPct - leadPct; // e.g. 30% for 40% MoU
 
-  // Photo Mode State
+  // Active Tab: 'upload' (PDF, Excel, or Photo) vs 'manual'
+  const [activeTab, setActiveTab] = useState<'upload' | 'manual'>('upload');
+
+  // Upload State
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [pendingRateCardFile, setPendingRateCardFile] = useState<File | null>(null);
   const [rateCardStoragePath, setRateCardStoragePath] = useState<string | null>(null);
   const [rateCardStorageUrl, setRateCardStorageUrl] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
-  const [scanStatusMessage, setScanStatusMessage] = useState('Scanning price list with OCR...');
+  const [scanStatusMessage, setScanStatusMessage] = useState('Reading rate card...');
   const [extractedItems, setExtractedItems] = useState<ExtractedItem[]>([]);
 
   // Industry-specific sample generator
@@ -154,11 +167,11 @@ Corporate Compliance & Legal Audit 25000`;
         const title = match[1].replace(/[₹Rs\.\:\-\t]/g, '').trim();
         const price = parseInt(match[2], 10);
         if (title.length > 2 && price > 10 && price < 500000) {
-          const leadReward = Math.max(25, Math.round(price * 0.10));
-          const convReward = Math.max(50, Math.round(price * 0.22));
+          const leadReward = Math.max(25, Math.round(price * (leadPct / 100)));
+          const convReward = Math.max(50, Math.round(price * (convPct / 100)));
           parsed.push({
             id: `item_${Date.now()}_${idx}`,
-            selected: false, // Must be ticked by provider to save into database
+            selected: true, // Pre-selected for provider review
             title,
             category: targetCat,
             price,
@@ -173,14 +186,19 @@ Corporate Compliance & Legal Audit 25000`;
     return parsed;
   };
 
-  // Handle rate card upload (Supports PDF documents, Scanned Photos, and Text Files)
-  const handleRateCardFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Unified File Upload Handler: Accepts PDF, Excel (.xlsx, .xls, .csv), Images, or Text
+  const handleUnifiedFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const isImage = file.type.startsWith('image/') || file.name.match(/\.(png|jpe?g|webp)$/i);
+    setPendingRateCardFile(file);
+    setUploadedFileName(file.name);
+    setIsScanning(true);
+    setScanStatusMessage(`Reading "${file.name}" & extracting services with ${agreedMouPct}% MoU agreement...`);
 
-    // If image, preview real photo; if PDF/doc, show document thumbnail
+    const isExcel = /\.(xlsx|xls|csv)$/i.test(file.name);
+    const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp)$/i.test(file.name);
+
     if (isImage) {
       const reader = new FileReader();
       reader.onload = () => {
@@ -188,49 +206,74 @@ Corporate Compliance & Legal Audit 25000`;
       };
       reader.readAsDataURL(file);
     } else {
-      setImagePreview('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="%230A2540"/><text x="50" y="45" font-size="11" fill="white" text-anchor="middle">RATE CARD</text><text x="50" y="62" font-size="9" fill="%2394A3B8" text-anchor="middle">DOCUMENT</text></svg>');
+      setImagePreview(
+        isExcel
+          ? 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="%230E8A5E"/><text x="50" y="55" font-size="12" font-weight="bold" fill="white" text-anchor="middle">EXCEL</text></svg>'
+          : 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="%230A2540"/><text x="50" y="45" font-size="11" font-weight="bold" fill="white" text-anchor="middle">RATE CARD</text><text x="50" y="62" font-size="9" fill="%2394A3B8" text-anchor="middle">PDF</text></svg>'
+      );
     }
 
-    // Keep file in local state; do NOT upload to database until provider confirms and publishes
-    setPendingRateCardFile(file);
-
-    setIsScanning(true);
-    setScanStatusMessage(`Scanning "${file.name}" & extracting service offerings and prices...`);
-
     try {
-      // 1. Try Claude Vision AI first (Strictly for uploaded provider rate cards / pictures)
       let items: ExtractedItem[] | null = null;
-      if (isClaudeConfigured()) {
-        setScanStatusMessage(`Claude AI Vision is scanning "${file.name}"...`);
-        items = await scanRateCardWithClaude(
-          file,
-          activeProvider.businessName,
-          defaultCategory,
-          (msg) => setScanStatusMessage(msg)
-        );
-      }
 
-      // 2. If Claude not configured or returns null, use local OCR / parser as fallback
-      if (!items || items.length === 0) {
-        setScanStatusMessage(`Scanning "${file.name}" with document parser...`);
-        const rawText = await extractRawTextFromMouFile(file, (msg) => setScanStatusMessage(msg));
-        items = parseOcrOrMenuText(rawText, file.name);
+      if (isExcel) {
+        // TIER B UPFRONT: Use Claude AI API Key first for Excel rate cards
+        if (isClaudeConfigured()) {
+          setScanStatusMessage(`Claude AI is extracting services & prices from "${file.name}" via API key (${agreedMouPct}% MoU)...`);
+          items = await scanExcelWithClaude(
+            file,
+            activeProvider.businessName,
+            defaultCategory,
+            agreedMouPct,
+            (msg) => setScanStatusMessage(msg)
+          );
+        }
+
+        // Graceful local fallback if API key is not present or API call fails
+        if (!items || items.length === 0) {
+          setScanStatusMessage(`Reading "${file.name}" with spreadsheet parser (${agreedMouPct}% MoU)...`);
+          const parsedXl = await parseExcelRateCard(file, agreedMouPct);
+          items = parsedXl.map((it) => ({
+            ...it,
+            selected: true,
+            category: it.category || defaultCategory
+          }));
+        }
+      } else {
+        // TIER B UPFRONT: Use Claude AI Vision / PDF Document processing first
+        if (isClaudeConfigured()) {
+          setScanStatusMessage(`Claude AI Vision is reading "${file.name}" via API key (${agreedMouPct}% MoU)...`);
+          items = await scanRateCardWithClaude(
+            file,
+            activeProvider.businessName,
+            defaultCategory,
+            agreedMouPct,
+            (msg) => setScanStatusMessage(msg)
+          );
+        }
+
+        // Graceful local fallback if API key is not present or API call fails
+        if (!items || items.length === 0) {
+          setScanStatusMessage(`Scanning "${file.name}" with document parser (${agreedMouPct}% MoU)...`);
+          const rawText = await extractRawTextFromMouFile(file, (msg) => setScanStatusMessage(msg));
+          items = parseOcrOrMenuText(rawText, file.name);
+        }
       }
 
       if (items && items.length > 0) {
         setExtractedItems(items);
-        showNotification(`Extracted ${items.length} services & prices from your rate card!`, 'success');
+        showNotification(`Extracted ${items.length} services & MRP prices from "${file.name}"!`, 'success');
       } else {
         setExtractedItems([]);
         showNotification(
-          'No service prices could be automatically detected from this document. Please use Quick Text Paste or Manual Entry.',
+          'No service names and prices could be detected from this file. Please verify file content or use manual entry.',
           'warning'
         );
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Rate card parse error:', err);
       setExtractedItems([]);
-      showNotification('Could not read file. Please use Quick Text Paste or Manual Entry.', 'warning');
+      showNotification(err?.message || 'Could not read file. Please try another format or manual entry.', 'warning');
     } finally {
       setIsScanning(false);
     }
@@ -242,7 +285,7 @@ Corporate Compliance & Legal Audit 25000`;
     const items = parseOcrOrMenuText(pasteMenuText, activeProvider.businessName);
     if (items.length > 0) {
       setExtractedItems(items);
-      setActiveTab('photo');
+      setActiveTab('upload');
       setImagePreview('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="%230A2540"/><text x="50" y="55" font-size="11" fill="white" text-anchor="middle">RATE CARD</text></svg>');
       showNotification(`Extracted ${items.length} services from rate card text!`, 'success');
     } else {
@@ -263,12 +306,153 @@ Corporate Compliance & Legal Audit 25000`;
     setExtractedItems((prev) => prev.map((item) => ({ ...item, selected: !allSelected })));
   };
 
-  // Update item field
+  // Update item field (with dynamic MoU affiliate percentage calculation on price change)
   const updateItemField = (id: string, field: keyof ExtractedItem, val: any) => {
     setExtractedItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, [field]: val } : item))
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        if (field === 'price') {
+          const numPrice = typeof val === 'number' ? val : parseFloat(val) || 0;
+          const lead = Math.max(25, Math.round(numPrice * (leadPct / 100)));
+          const conv = Math.max(50, Math.round(numPrice * (convPct / 100)));
+          return {
+            ...item,
+            price: numPrice,
+            affiliateLeadReward: lead,
+            affiliateConvReward: conv
+          };
+        }
+        return { ...item, [field]: val };
+      })
     );
   };
+
+  // Shared Review & Commission Configuration Table for Extracted Items
+  const renderExtractedTable = () => (
+    <div>
+      {/* MoU Split Explanation Banner */}
+      <div
+        style={{
+          backgroundColor: '#F0FDF4',
+          border: '1px solid #BBF7D0',
+          borderRadius: '8px',
+          padding: '9px 14px',
+          marginBottom: '12px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: '0.82rem',
+          color: '#166534',
+          flexWrap: 'wrap',
+          gap: '8px'
+        }}
+      >
+        <span>
+          🤝 <strong>Commercial MoU ({activeProvider.businessName}):</strong> Platform referral fee of <strong>{agreedMouPct}%</strong> applies to converted patient/customer bills.
+        </span>
+        <span style={{ fontSize: '0.74rem', color: '#15803D', fontWeight: 600 }}>
+          Billed monthly upon verified sales
+        </span>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+        <div>
+          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--brand-navy)' }}>
+            Extracted Services ({extractedItems.filter((i) => i.selected).length} ticked of {extractedItems.length})
+          </span>
+          <span style={{ fontSize: '0.78rem', color: '#0E8A5E', fontWeight: 600, display: 'block', marginTop: '2px' }}>
+            ✓ Tick the checkbox next to the services you want to store in your database.
+          </span>
+        </div>
+        <button
+          type="button"
+          className="btn btn-outline btn-sm"
+          onClick={toggleSelectAll}
+          style={{ fontSize: '0.75rem', padding: '4px 10px' }}
+        >
+          {extractedItems.every((i) => i.selected) ? 'Untick All' : 'Tick All'}
+        </button>
+      </div>
+
+      <div className="table-responsive" style={{ maxHeight: '340px', overflowY: 'auto' }}>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th style={{ width: '46px', textAlign: 'center' }}>
+                <input
+                  type="checkbox"
+                  checked={extractedItems.length > 0 && extractedItems.every((i) => i.selected)}
+                  onChange={toggleSelectAll}
+                  title="Tick all / Untick all"
+                  style={{ cursor: 'pointer' }}
+                />
+              </th>
+              <th>Service / Item Name</th>
+              <th style={{ width: '160px' }}>Price / MRP (₹)</th>
+              <th style={{ width: '200px' }}>Platform Referral Fee ({agreedMouPct}% MoU)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {extractedItems.map((item) => {
+              const mrp = Number(item.price) || 0;
+              const providerFee = Math.round(mrp * (agreedMouPct / 100));
+
+              return (
+                <tr key={item.id} style={{ opacity: item.selected ? 1 : 0.45 }}>
+                  <td style={{ textAlign: 'center' }}>
+                    <input
+                      type="checkbox"
+                      checked={item.selected}
+                      onChange={() => toggleItemSelect(item.id)}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={item.title}
+                      onChange={(e) => updateItemField(item.id, 'title', e.target.value)}
+                      style={{ padding: '6px 8px', fontSize: '0.84rem' }}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      className="form-input"
+                      value={item.price}
+                      onChange={(e) => updateItemField(item.id, 'price', parseFloat(e.target.value) || 0)}
+                      style={{ padding: '6px 8px', fontSize: '0.84rem', fontWeight: 700 }}
+                    />
+                  </td>
+                  <td style={{ verticalAlign: 'middle' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                      <span style={{ fontSize: '0.90rem', fontWeight: 800, color: '#0A2540' }}>
+                        ₹{providerFee.toLocaleString('en-IN')}
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          backgroundColor: '#F1F5F9',
+                          color: '#475569',
+                          padding: '2px 7px',
+                          borderRadius: '4px',
+                          border: '1px solid #CBD5E1'
+                        }}
+                      >
+                        {agreedMouPct}% of MRP
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 
   // Save ONLY selected (ticked) extracted items to database
   const handleBulkPublish = () => {
@@ -289,33 +473,22 @@ Corporate Compliance & Legal Audit 25000`;
     }
 
     selected.forEach((item) => {
-      const rules: OfferingRewardRule[] = [];
+      const mrp = Number(item.price) || 0;
+      const totalProviderFee = Math.round(mrp * (agreedMouPct / 100)); // e.g. ₹30 for 30% on ₹100
+      const totalAffiliateReward = Math.round(totalProviderFee * 0.5);  // e.g. ₹15 (50% of ₹30)
 
-      if (item.affiliateLeadReward > 0) {
-        rules.push({
-          id: `rr_lead_${Date.now()}_${item.id}`,
-          offeringId: '',
-          eventType: 'qualified_lead',
-          providerFeeRupees: item.affiliateLeadReward * 2, // Provider pays 2x, affiliate receives exactly 50% per MoU policy
-          affiliateRewardRupees: item.affiliateLeadReward,
-          qualificationCriteria: 'Valid prospect contact confirmed within service area.',
-          version: 1,
-          isActive: true
-        });
-      }
-
-      if (item.affiliateConvReward > 0) {
-        rules.push({
+      const rules: OfferingRewardRule[] = [
+        {
           id: `rr_conv_${Date.now()}_${item.id}`,
           offeringId: '',
           eventType: 'successful_conversion',
-          providerFeeRupees: item.affiliateConvReward * 2, // Provider pays 2x, affiliate receives exactly 50% per MoU policy
-          affiliateRewardRupees: item.affiliateConvReward,
+          providerFeeRupees: totalProviderFee,
+          affiliateRewardRupees: totalAffiliateReward,
           conversionCriteria: 'Completed customer service purchase / invoice cleared.',
           version: 1,
           isActive: true
-        });
-      }
+        }
+      ];
 
       const created = createOffering({
         providerId: activeProvider.id,
@@ -409,10 +582,10 @@ Corporate Compliance & Legal Audit 25000`;
           <button className="modal-close-btn" onClick={onClose}>✕</button>
         </div>
 
-        {/* Mode Selector Tabs (Photo vs Quick Paste vs Manual) */}
+        {/* Mode Selector Tabs (Unified Upload vs Manual) */}
         <div style={{ display: 'flex', borderBottom: '1px solid var(--border-light)', backgroundColor: 'var(--bg-surface-subtle)', padding: '6px 20px 0', gap: '8px', flexWrap: 'wrap' }}>
           <button
-            onClick={() => setActiveTab('photo')}
+            onClick={() => setActiveTab('upload')}
             style={{
               padding: '10px 16px',
               fontSize: '0.86rem',
@@ -423,32 +596,12 @@ Corporate Compliance & Legal Audit 25000`;
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              color: activeTab === 'photo' ? 'var(--brand-cobalt)' : 'var(--text-secondary)',
-              borderBottom: activeTab === 'photo' ? '3px solid var(--brand-cobalt)' : '3px solid transparent'
+              color: activeTab === 'upload' ? 'var(--brand-cobalt)' : 'var(--text-secondary)',
+              borderBottom: activeTab === 'upload' ? '3px solid var(--brand-cobalt)' : '3px solid transparent'
             }}
           >
-            <Camera size={16} />
-            <span>📸 Snap / Upload Rate Card (OCR)</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('paste')}
-            style={{
-              padding: '10px 16px',
-              fontSize: '0.86rem',
-              fontWeight: 700,
-              border: 'none',
-              background: 'transparent',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              color: activeTab === 'paste' ? 'var(--brand-cobalt)' : 'var(--text-secondary)',
-              borderBottom: activeTab === 'paste' ? '3px solid var(--brand-cobalt)' : '3px solid transparent'
-            }}
-          >
-            <ClipboardList size={16} />
-            <span>📋 Quick Text / Rate Card Paste</span>
+            <Upload size={16} />
+            <span>📁 Upload Rate Card (PDF, Excel, or Photo)</span>
           </button>
 
           <button
@@ -474,10 +627,10 @@ Corporate Compliance & Legal Audit 25000`;
 
         {/* Modal Body */}
         <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
-          {activeTab === 'photo' && (
+          {/* 1. UNIFIED UPLOAD MODE (Accepts PDF, Excel .xlsx, .xls, .csv, and Photos) */}
+          {activeTab === 'upload' && (
             <div>
-              {/* Photo Upload / Rate Card Dropzone */}
-              {!imagePreview ? (
+              {extractedItems.length === 0 ? (
                 <div>
                   <div
                     style={{
@@ -487,231 +640,125 @@ Corporate Compliance & Legal Audit 25000`;
                       textAlign: 'center',
                       backgroundColor: 'var(--brand-cobalt-light)',
                       marginBottom: '20px',
-                      cursor: 'pointer'
+                      position: 'relative'
                     }}
                   >
                     <input
                       type="file"
-                      id="rateCardInput"
-                      accept=".pdf,.png,.jpg,.jpeg,.webp,.txt"
+                      id="rateCardUnifiedInput"
+                      accept=".pdf,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.webp,.txt"
                       style={{ display: 'none' }}
-                      onChange={handleRateCardFileChange}
+                      onChange={handleUnifiedFileUpload}
                     />
-                    <label htmlFor="rateCardInput" style={{ cursor: 'pointer', display: 'block' }}>
-                      <Camera size={44} color="var(--brand-cobalt)" style={{ margin: '0 auto 12px' }} />
-                      <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--brand-navy)', marginBottom: '6px' }}>
-                        Upload or Snap Your Price List / Rate Sheet
-                      </h3>
-                      <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', maxWidth: '480px', margin: '0 auto 16px' }}>
-                        Supports PDF tariff sheets, test menus, price list documents, or photo scans (PNG/JPG). All services and retail prices will be extracted automatically.
-                      </p>
-                      <button
-                        type="button"
-                        className="btn btn-primary"
-                        onClick={() => document.getElementById('rateCardInput')?.click()}
-                      >
-                        <Upload size={16} />
-                        <span>Choose PDF or Image Document</span>
-                      </button>
-                    </label>
+
+                    {isScanning ? (
+                      <div style={{ textAlign: 'center', padding: '24px 20px' }}>
+                        <Sparkles size={36} color="var(--brand-cobalt)" style={{ animation: 'spin 2s linear infinite', margin: '0 auto 12px' }} />
+                        <p style={{ fontWeight: 700, color: 'var(--brand-navy)' }}>
+                          {scanStatusMessage}
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload size={44} color="var(--brand-cobalt)" style={{ margin: '0 auto 12px' }} />
+                        <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--brand-navy)', marginBottom: '8px' }}>
+                          Upload Tariff Sheet or Rate Card
+                        </h3>
+                        <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)', maxWidth: '520px', margin: '0 auto 20px', lineHeight: 1.55 }}>
+                          Upload your price list as a <strong>PDF</strong>, <strong>Excel spreadsheet (.xlsx, .csv)</strong>, or photo scan. Only the <strong>Service Name</strong> and <strong>MRP Price</strong> are extracted with agreed MoU % calculation.
+                        </p>
+
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={() => document.getElementById('rateCardUnifiedInput')?.click()}
+                          >
+                            <Upload size={16} />
+                            <span>Choose File (PDF, Excel, or Photo)</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            className="btn btn-outline"
+                            onClick={() => downloadSampleRateCardTemplate(activeProvider.businessName)}
+                          >
+                            <Download size={16} />
+                            <span>Download 2-Column Excel Template</span>
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* 3-Column Extraction Guidance Box */}
+                  <div style={{ backgroundColor: '#F8FAFC', padding: '14px 18px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
+                    <div style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--brand-navy)', marginBottom: '8px' }}>
+                      ⚡ AI Extraction with API Key & MoU Commercial Rules:
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                      <div style={{ background: '#FFF', padding: '10px 12px', borderRadius: '6px', border: '1px solid var(--border-light)' }}>
+                        <strong style={{ color: 'var(--brand-navy)', display: 'block', marginBottom: '2px' }}>1. Service / Test Name</strong>
+                        Extracted directly from document
+                      </div>
+                      <div style={{ background: '#FFF', padding: '10px 12px', borderRadius: '6px', border: '1px solid var(--border-light)' }}>
+                        <strong style={{ color: 'var(--brand-navy)', display: 'block', marginBottom: '2px' }}>2. Price / MRP (₹)</strong>
+                        Customer retail price
+                      </div>
+                      <div style={{ background: '#FFF', padding: '10px 12px', borderRadius: '6px', border: '1px solid var(--border-light)' }}>
+                        <strong style={{ color: '#047857', display: 'block', marginBottom: '2px' }}>3. Affiliate Share ({agreedMouPct}%)</strong>
+                        {leadPct}% lead (min ₹25) + {convPct}% sale (min ₹50)
+                      </div>
+                    </div>
                   </div>
                 </div>
               ) : (
                 <div>
-                  {/* Photo Preview & Scanning Bar */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'var(--bg-surface-subtle)', padding: '12px 16px', borderRadius: 'var(--radius-md)', marginBottom: '16px', border: '1px solid var(--border-light)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <img
-                        src={imagePreview}
-                        alt="Rate Card"
-                        style={{ width: '48px', height: '48px', objectFit: 'cover', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-light)' }}
-                      />
+                  {/* File Loaded Status Header */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#F0F9FF', padding: '12px 18px', borderRadius: 'var(--radius-md)', marginBottom: '16px', border: '1px solid #BAE6FD', flexWrap: 'wrap', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <FileText size={26} color="var(--brand-cobalt)" />
                       <div>
-                        <strong style={{ fontSize: '0.9rem', color: 'var(--brand-navy)', display: 'block' }}>
-                          Rate Card Image Loaded
+                        <strong style={{ fontSize: '0.92rem', color: 'var(--brand-navy)', display: 'block' }}>
+                          {uploadedFileName || 'Rate Card Document Loaded'}
                         </strong>
-                        <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)', display: 'block' }}>
-                          {isScanning ? `🔍 ${scanStatusMessage}` : `✓ ${extractedItems.length} services detected`}
+                        <span style={{ fontSize: '0.78rem', color: '#0369A1', fontWeight: 600 }}>
+                          ✓ {extractedItems.length} services extracted with agreed MoU % rates
                         </span>
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-sm"
-                      onClick={() => {
-                        setImagePreview(null);
-                        setExtractedItems([]);
-                      }}
-                    >
-                      Upload Different Photo
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        type="file"
+                        id="rateCardUnifiedInputReplace"
+                        accept=".pdf,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.webp,.txt"
+                        style={{ display: 'none' }}
+                        onChange={handleUnifiedFileUpload}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        onClick={() => document.getElementById('rateCardUnifiedInputReplace')?.click()}
+                      >
+                        <Upload size={14} />
+                        <span>Upload Different File</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        onClick={() => downloadSampleRateCardTemplate(activeProvider.businessName)}
+                      >
+                        <Download size={14} />
+                        <span>Template (.xlsx)</span>
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Scanning Animation */}
-                  {isScanning && (
-                    <div style={{ textAlign: 'center', padding: '40px 20px' }}>
-                      <Sparkles size={36} color="var(--brand-cobalt)" style={{ animation: 'spin 2s linear infinite', margin: '0 auto 12px' }} />
-                      <p style={{ fontWeight: 600, color: 'var(--brand-navy)' }}>
-                        {scanStatusMessage}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Extracted Services Review Grid */}
-                  {!isScanning && extractedItems.length > 0 && (
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                        <div>
-                          <span style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--brand-navy)' }}>
-                            Extracted Services ({extractedItems.filter((i) => i.selected).length} ticked of {extractedItems.length})
-                          </span>
-                          <span style={{ fontSize: '0.78rem', color: '#0E8A5E', fontWeight: 600, display: 'block', marginTop: '2px' }}>
-                            ✓ Tick the checkbox next to the services you want to store in your database.
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          className="btn btn-outline btn-sm"
-                          onClick={toggleSelectAll}
-                          style={{ fontSize: '0.75rem', padding: '4px 10px' }}
-                        >
-                          {extractedItems.every((i) => i.selected) ? 'Untick All' : 'Tick All'}
-                        </button>
-                      </div>
-
-                      <div className="table-responsive" style={{ maxHeight: '300px' }}>
-                        <table className="data-table">
-                          <thead>
-                            <tr>
-                              <th style={{ width: '50px', textAlign: 'center' }}>
-                                <input
-                                  type="checkbox"
-                                  checked={extractedItems.length > 0 && extractedItems.every((i) => i.selected)}
-                                  onChange={toggleSelectAll}
-                                  title="Tick all / Untick all"
-                                  style={{ cursor: 'pointer' }}
-                                />
-                              </th>
-                              <th>Service Name</th>
-                              <th style={{ width: '135px' }}>Customer Price (₹)</th>
-                              <th style={{ width: '150px' }}>Affiliate: Lead (₹)</th>
-                              <th style={{ width: '150px' }}>Affiliate: Sale (₹)</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {extractedItems.map((item) => (
-                              <tr key={item.id} style={{ opacity: item.selected ? 1 : 0.45 }}>
-                                <td>
-                                  <input
-                                    type="checkbox"
-                                    checked={item.selected}
-                                    onChange={() => toggleItemSelect(item.id)}
-                                    style={{ cursor: 'pointer' }}
-                                  />
-                                </td>
-                                <td>
-                                  <input
-                                    type="text"
-                                    className="form-input"
-                                    value={item.title}
-                                    onChange={(e) => updateItemField(item.id, 'title', e.target.value)}
-                                    style={{ padding: '6px 8px', fontSize: '0.84rem' }}
-                                  />
-                                </td>
-                                <td>
-                                  <input
-                                    type="number"
-                                    className="form-input"
-                                    value={item.price}
-                                    onChange={(e) => updateItemField(item.id, 'price', parseFloat(e.target.value) || 0)}
-                                    style={{ padding: '6px 8px', fontSize: '0.84rem', fontWeight: 700 }}
-                                  />
-                                </td>
-                                <td>
-                                  <input
-                                    type="number"
-                                    className="form-input"
-                                    value={item.affiliateLeadReward}
-                                    onChange={(e) => updateItemField(item.id, 'affiliateLeadReward', parseFloat(e.target.value) || 0)}
-                                    style={{ padding: '6px 8px', fontSize: '0.84rem', color: 'var(--lead-teal)', fontWeight: 600 }}
-                                    title="What affiliate receives for introducing a qualified lead"
-                                  />
-                                </td>
-                                <td>
-                                  <input
-                                    type="number"
-                                    className="form-input"
-                                    value={item.affiliateConvReward}
-                                    onChange={(e) => updateItemField(item.id, 'affiliateConvReward', parseFloat(e.target.value) || 0)}
-                                    style={{ padding: '6px 8px', fontSize: '0.84rem', color: 'var(--finance-green)', fontWeight: 700 }}
-                                    title="What affiliate receives for a closed customer purchase"
-                                  />
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
+                  {/* Render the clean 2-column review table */}
+                  {renderExtractedTable()}
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Quick Rate Card Text Paste Mode */}
-          {activeTab === 'paste' && (
-            <div>
-              <div style={{ backgroundColor: 'var(--brand-cobalt-light)', padding: '16px 20px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)', marginBottom: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '12px' }}>
-                  <div>
-                    <h4 style={{ fontSize: '0.98rem', fontWeight: 800, color: 'var(--brand-navy)', margin: '0 0 4px 0' }}>
-                      📋 Fast Rate Card & Price Extractor
-                    </h4>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                      Paste or edit service packages and prices line by line. The system automatically parses each service and calculates affiliate referral commissions.
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn btn-outline btn-sm"
-                    style={{ backgroundColor: '#FFF' }}
-                    onClick={() => {
-                      setPasteMenuText(getProviderSampleText());
-                    }}
-                  >
-                    <ClipboardList size={14} />
-                    <span>Load Sample Rate Card ({activeProvider.businessName})</span>
-                  </button>
-                </div>
-
-                <textarea
-                  className="form-textarea"
-                  rows={10}
-                  style={{ fontFamily: 'monospace', fontSize: '0.86rem', lineHeight: 1.5, backgroundColor: '#FFF' }}
-                  value={pasteMenuText}
-                  onChange={(e) => setPasteMenuText(e.target.value)}
-                  placeholder={
-                    isHealthcare
-                      ? `Paste your diagnostic tests and package prices here line by line:\nComprehensive Master Health Checkup 3999\nExecutive Cardiac & Diabetes Screening 6499\nComplete Blood Picture (CBP) 350\nLipid Profile Panel 650\nDiabetes Screening Package 850\nThyroid Function Test 550`
-                      : isIT
-                      ? `Paste your IT and cloud service offerings line by line:\nCloud Architecture & Security Audit 25000\nAWS Cost Optimization 15000`
-                      : `Paste your service offerings and prices here line by line:\nService Package Name 2500\nAdvanced Comprehensive Plan 5000`
-                  }
-                />
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '12px' }}>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={handleQuickPasteSubmit}
-                  >
-                    <Sparkles size={16} />
-                    <span>⚡ Auto-Extract All Services & Prices</span>
-                  </button>
-                </div>
-              </div>
             </div>
           )}
 
@@ -856,7 +903,7 @@ Corporate Compliance & Legal Audit 25000`;
             Cancel
           </button>
 
-          {activeTab === 'photo' && extractedItems.length > 0 && (
+          {activeTab === 'upload' && extractedItems.length > 0 && (
             <button
               type="button"
               className="btn btn-primary"

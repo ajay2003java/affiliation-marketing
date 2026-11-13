@@ -1255,6 +1255,7 @@ body {
   .b2b-nav-inner {
     width: 100% !important;
     max-width: 100% !important;
+    display: flex !important;
     flex-wrap: nowrap !important;
     justify-content: space-between !important;
     align-items: center !important;
@@ -1267,7 +1268,7 @@ body {
     align-items: center !important;
     gap: 6px !important;
     min-width: 0 !important;
-    flex-shrink: 1 !important;
+    flex-shrink: 0 !important;
   }
 
   .nav-subtext-hide {
@@ -1300,28 +1301,31 @@ body {
     display: inline-block !important;
   }
 
+  @media (max-width: 400px) {
+    .nav-brand-badge {
+      display: none !important;
+    }
+  }
+
   .b2b-nav-actions {
     display: flex !important;
     align-items: center !important;
     gap: 6px !important;
     flex-shrink: 0 !important;
+    justify-content: flex-end !important;
   }
 
   .nav-btn-signin {
-    padding: 6px 9px !important;
+    padding: 6px 12px !important;
     font-size: 0.76rem !important;
     border-radius: 6px !important;
     white-space: nowrap !important;
     flex-shrink: 0 !important;
   }
 
-  .nav-btn-cta {
-    padding: 6px 11px !important;
-    font-size: 0.76rem !important;
-    border-radius: 6px !important;
-    white-space: nowrap !important;
-    gap: 4px !important;
-    flex-shrink: 0 !important;
+  .nav-btn-cta.desktop-only-btn,
+  .desktop-only-btn {
+    display: none !important;
   }
 
   /* 2. Full-Viewport Hero Banner (Full initial screen, perfectly flat bottom edge, zero half-half) */
@@ -1543,9 +1547,19 @@ body {
   display: none;
 }
 
+.desktop-only-btn {
+  display: none !important;
+}
+
 @media (min-width: 860px) {
   .desktop-nav-links {
     display: flex !important;
+  }
+}
+
+@media (min-width: 992px) {
+  .desktop-only-btn {
+    display: inline-flex !important;
   }
 }
 

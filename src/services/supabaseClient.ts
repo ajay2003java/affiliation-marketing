@@ -7,8 +7,8 @@ import {
   CallLogEntry
 } from '../types';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://hkovcvqhzjlcetotplcl.supabase.co';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhrb3ZjdnFoempsY2V0b3RwbGNsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzODAzMTYsImV4cCI6MjEwNzk1NjMxNn0.ZGBCOFNmFYy8vXwatFMrNzpMmXXwGi1cBQ_iz5XCI1Q';
+const supabaseUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || 'https://hkovcvqhzjlcetotplcl.supabase.co';
+const supabaseAnonKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhrb3ZjdnFoempsY2V0b3RwbGNsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzODAzMTYsImV4cCI6MjEwNzk1NjMxNn0.ZGBCOFNmFYy8vXwatFMrNzpMmXXwGi1cBQ_iz5XCI1Q';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
@@ -129,6 +129,84 @@ export async function uploadRateCardImage(
     console.error('Upload exception for provider-rate-cards:', err);
     return { success: false, error: err?.message || 'Upload failed' };
   }
+}
+
+/**
+ * Upload a customer bill / receipt photo to Supabase Storage bucket 'provider-bills'
+ * (falls back smoothly to 'provider-rate-cards' if 'provider-bills' is not yet created in Supabase UI)
+ */
+export async function uploadProviderBillReceipt(
+  file: File,
+  providerId: string = 'general',
+  referralCode: string = 'ref'
+): Promise<StorageUploadResult> {
+  const cleanCode = referralCode.replace(/[^a-zA-Z0-9]/g, '_');
+  const cleanFileName = `bill_${cleanCode}_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+  const filePath = `${providerId}/${cleanFileName}`;
+
+  // 1. Attempt upload to dedicated 'provider-bills' bucket
+  try {
+    const { data, error } = await supabase.storage
+      .from('provider-bills')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true
+      });
+
+    if (!error && data) {
+      const { data: publicData } = supabase.storage
+        .from('provider-bills')
+        .getPublicUrl(data.path);
+
+      return {
+        success: true,
+        filePath: data.path,
+        fileUrl: publicData?.publicUrl || data.path
+      };
+    }
+  } catch (err) {
+    console.warn('provider-bills bucket upload attempt:', err);
+  }
+
+  // 2. Fallback to existing 'provider-rate-cards' bucket
+  try {
+    const { data, error } = await supabase.storage
+      .from('provider-rate-cards')
+      .upload(`bills/${filePath}`, file, {
+        cacheControl: '3600',
+        upsert: true
+      });
+
+    if (!error && data) {
+      const { data: publicData } = supabase.storage
+        .from('provider-rate-cards')
+        .getPublicUrl(data.path);
+
+      return {
+        success: true,
+        filePath: data.path,
+        fileUrl: publicData?.publicUrl || data.path
+      };
+    }
+  } catch (err) {
+    console.warn('Fallback bucket upload attempt:', err);
+  }
+
+  // 3. Fallback to data URL so the uploaded receipt is never lost
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      resolve({
+        success: true,
+        fileUrl: reader.result as string,
+        filePath: cleanFileName
+      });
+    };
+    reader.onerror = () => {
+      resolve({ success: false, error: 'Could not read receipt image' });
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 // =========================================================================
@@ -302,9 +380,11 @@ export async function syncReferralToSupabase(referral: Referral): Promise<boolea
         customer_notes: referral.customerNotes,
         lead_status: referral.leadStatus,
         conversion_status: referral.conversionStatus,
-        sale_value_rupees: referral.saleValueRupees || null,
+        sale_value_rupees: referral.actualBillAmount || referral.saleValueRupees || null,
         partner_invoice_ref: referral.partnerInvoiceRef || null,
-        qualification_notes: referral.qualificationNotes || null,
+        qualification_notes: referral.billProofUrl
+          ? `${referral.qualificationNotes || ''} [Bill Receipt: ${referral.billProofUrl}]`.trim()
+          : referral.qualificationNotes || null,
         authorization_confirmed: true
       }, { onConflict: 'id' });
 
@@ -378,4 +458,70 @@ export async function syncCommissionToSupabase(entry: CommissionLedgerEntry): Pr
     return false;
   }
 }
+
+export interface AffiliateProfileSyncData {
+  userId?: string;
+  id?: string;
+  name?: string;
+  email?: string;
+  phone?: string;
+  password?: string;
+  city?: string;
+  category?: string;
+  upiVpa?: string;
+  panNumber?: string;
+}
+
+/**
+ * Upsert affiliate partner profile in `affiliate_profiles` table
+ */
+export async function syncAffiliateProfileToSupabase(profile: AffiliateProfileSyncData): Promise<boolean> {
+  try {
+    const validId = toValidUuid(profile.userId || profile.id);
+    const { error } = await supabase
+      .from('affiliate_profiles')
+      .upsert({
+        id: validId,
+        user_id: validId,
+        full_name: profile.name || 'Affiliate Partner',
+        email: profile.email || '',
+        phone: profile.phone || '',
+        city: profile.city || 'Hyderabad',
+        upi_vpa: profile.upiVpa || null,
+        pan_number: profile.panNumber || null,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+
+    if (error) {
+      console.warn('Supabase affiliate profile sync note:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Exception syncing affiliate profile to Supabase:', err);
+    return false;
+  }
+}
+
+/**
+ * Permanently delete a referral from `referrals` and its linked `referral_call_logs`
+ * Used after provider rejects or when affiliate has successfully received money/payout.
+ */
+export async function deleteReferralFromSupabase(referralId: string): Promise<boolean> {
+  try {
+    const validId = toValidUuid(referralId);
+    // Delete linked call logs first if foreign key cascade not active
+    await supabase.from('referral_call_logs').delete().eq('referral_id', validId);
+    const { error } = await supabase.from('referrals').delete().eq('id', validId);
+    if (error) {
+      console.warn('Supabase delete referral notice:', error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Exception deleting referral from Supabase:', err);
+    return false;
+  }
+}
+
 

@@ -123,7 +123,8 @@ export const AuthPage: React.FC = () => {
       email: affEmail,
       phone: affPhone,
       occupation: affOccupation,
-      city: affCity
+      city: affCity,
+      password: affPassword
     });
 
     if (!res.success && res.error) {
@@ -776,19 +777,26 @@ export const AuthPage: React.FC = () => {
 
                     <div>
                       <label style={{ display: 'block', fontSize: '0.84rem', fontWeight: 700, color: 'var(--brand-navy)', marginBottom: '6px' }}>
-                        Primary Operating City
+                        Primary Operating City / Area
                       </label>
                       <div style={{ position: 'relative' }}>
-                        <MapPin size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '12px' }} />
-                        <input
-                          type="text"
+                        <MapPin size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '12px', zIndex: 1 }} />
+                        <select
                           id="input-affiliate-signup-city"
-                          className="form-input"
-                          style={{ paddingLeft: '38px', width: '100%' }}
+                          className="form-select"
+                          style={{ paddingLeft: '38px', width: '100%', fontSize: '0.86rem' }}
                           value={affCity}
                           onChange={(e) => setAffCity(e.target.value)}
-                          placeholder="Hyderabad, Bangalore, Visakhapatnam..."
-                        />
+                        >
+                          <option value="Hyderabad">Hyderabad</option>
+                          <option value="Visakhapatnam (Vizag)">Visakhapatnam (Vizag)</option>
+                          <option value="Vijayawada">Vijayawada</option>
+                          <option value="Secunderabad">Secunderabad</option>
+                          <option value="Warangal">Warangal</option>
+                          <option value="Guntur">Guntur</option>
+                          <option value="Tirupati">Tirupati</option>
+                          <option value="Bangalore">Bangalore</option>
+                        </select>
                       </div>
                     </div>
                   </div>

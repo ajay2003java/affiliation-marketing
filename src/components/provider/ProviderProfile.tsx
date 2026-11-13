@@ -3,12 +3,26 @@ import { useData } from '../../context/DataContext';
 import { useApp } from '../../context/AppContext';
 import { Building2, ShieldCheck, Check, Edit2, Save, X, Key, Lock, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { Provider } from '../../types';
+import { MOCK_PROVIDERS } from '../../services/mockData';
 
 export const ProviderProfile: React.FC = () => {
   const { providers, updateProvider } = useData();
-  const { activeProviderId, showNotification, changeUserPassword, currentUser } = useApp();
+  const { activeProviderId, showNotification, changeUserPassword, currentUser, currentRole } = useApp();
 
-  const provider: Provider | undefined = providers.find((p) => p.id === activeProviderId);
+  const provider: Provider | undefined =
+    providers.find(
+      (p) =>
+        p.id === activeProviderId ||
+        p.userId === activeProviderId ||
+        (currentUser.email && p.email?.toLowerCase() === currentUser.email?.toLowerCase())
+    ) ||
+    MOCK_PROVIDERS.find(
+      (p) =>
+        p.id === activeProviderId ||
+        p.userId === activeProviderId ||
+        (currentUser.email && p.email?.toLowerCase() === currentUser.email?.toLowerCase())
+    ) ||
+    (currentRole === 'provider' ? MOCK_PROVIDERS[0] : undefined);
 
   const [isEditing, setIsEditing] = useState(false);
   const [bizName, setBizName] = useState(provider?.businessName || '');

@@ -74,11 +74,17 @@ const MainRouter: React.FC = () => {
       {/* Affiliate Routes */}
       {currentRole === 'affiliate' && (
         <>
-          {(activeTab === 'affiliate_dashboard' || activeTab === 'affiliate_home') && <AffiliateDashboard />}
+          {(activeTab === 'affiliate_dashboard' || activeTab === 'affiliate_home') && (
+            <AffiliateDashboard initialSection="submit_referral" />
+          )}
           {activeTab === 'browse_services' && <BrowseServices />}
           {activeTab === 'browse_providers' && <BrowseProviders />}
-          {activeTab === 'my_referrals' && <ReferralsList />}
-          {activeTab === 'my_commissions' && <CommissionView />}
+          {activeTab === 'my_referrals' && (
+            <AffiliateDashboard initialSection="referrals_management" />
+          )}
+          {activeTab === 'my_commissions' && (
+            <AffiliateDashboard initialSection="payments" />
+          )}
           {activeTab === 'my_contacts' && <MyContacts />}
           {activeTab === 'affiliate_profile' && <AffiliateProfile />}
         </>

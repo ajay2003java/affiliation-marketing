@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useData } from '../../context/DataContext';
 import { useApp } from '../../context/AppContext';
-import { Provider, Referral, OfferingRewardRule } from '../../types';
+import { Provider, Referral, OfferingRewardRule, ProviderMonthlyInvoice, ProviderMonthlyInvoiceItem } from '../../types';
 import {
   Building2,
   Plus,
@@ -43,8 +43,23 @@ import {
 } from '../../services/mouParser';
 
 export const AdminClientManager: React.FC = () => {
-  const { providers, referrals, commissionLedger, addProvider, recordClientPayment } = useData();
+  const {
+    providers,
+    referrals,
+    commissionLedger,
+    providerMonthlyInvoices,
+    addProvider,
+    recordClientPayment,
+    generateProviderMonthlyInvoice,
+    generateAllMonthlyInvoices,
+    markProviderMonthlyInvoicePaid
+  } = useData();
   const { showNotification, switchRole, setActiveProviderId, registerProviderByAdmin, savedProviderUsers, loginAsProvider } = useApp();
+
+  // Admin View Tabs: 'clients' vs 'invoices'
+  const [adminSubTab, setAdminSubTab] = useState<'clients' | 'invoices'>('clients');
+  const [viewInvoiceModal, setViewInvoiceModal] = useState<ProviderMonthlyInvoice | null>(null);
+  const [invoicePayRefInput, setInvoicePayRefInput] = useState('');
 
   // Selected client to view detailed referrals & billing breakdown
   const [selectedClient, setSelectedClient] = useState<Provider | null>(null);
@@ -160,7 +175,23 @@ export const AdminClientManager: React.FC = () => {
   const clientBillingSummary = providers.map((prov) => {
     const provReferrals = referrals.filter((r) => r.providerId === prov.id);
     const qualifiedLeads = provReferrals.filter((r) => r.leadStatus === 'qualified').length;
-    const conversions = provReferrals.filter((r) => r.conversionStatus === 'converted').length;
+    const conversions = provReferrals.filter(
+      (r) =>
+        r.conversionStatus === 'converted' ||
+        r.conversionStatus === 'converted_pending_clearance' ||
+        r.conversionStatus === 'cleared_ready_for_payout' ||
+        r.conversionStatus === 'paid_and_settled'
+    ).length;
+
+    // Unbilled converted leads for this provider
+    const unbilledRefs = provReferrals.filter(
+      (r) =>
+        (r.conversionStatus === 'converted_pending_clearance' || r.conversionStatus === 'converted') &&
+        !r.providerInvoiceId
+    );
+    const mouPct = prov.commissionPercent || prov.activeAgreements?.[0]?.grossReferralPct || 30;
+    const unbilledTotalBill = unbilledRefs.reduce((sum, r) => sum + (r.actualBillAmount || r.saleValueRupees || 100), 0);
+    const unbilledFee = Math.round(unbilledTotalBill * (mouPct / 100));
 
     // Sum of provider fees owed from commission ledger for this provider
     const provCommissions = commissionLedger.filter((c) => c.providerId === prov.id);
@@ -178,13 +209,34 @@ export const AdminClientManager: React.FC = () => {
       amountPaid,
       balanceOwed,
       provReferrals,
-      provCommissions
+      provCommissions,
+      unbilledRefs,
+      unbilledTotalBill,
+      unbilledFee,
+      mouPct
     };
   });
 
   const totalOwedByAllClients = clientBillingSummary.reduce((sum, c) => sum + c.totalAccruedFee, 0);
   const totalCollectedFromClients = clientBillingSummary.reduce((sum, c) => sum + c.amountPaid, 0);
   const totalOutstandingBalance = Math.max(0, totalOwedByAllClients - totalCollectedFromClients);
+
+  const totalUnbilledConversions = referrals.filter(
+    (r) =>
+      (r.conversionStatus === 'converted_pending_clearance' || r.conversionStatus === 'converted') &&
+      !r.providerInvoiceId
+  ).length;
+
+  const providersWithUnbilledCount = providers.filter((p) =>
+    referrals.some(
+      (r) =>
+        r.providerId === p.id &&
+        (r.conversionStatus === 'converted_pending_clearance' || r.conversionStatus === 'converted') &&
+        !r.providerInvoiceId
+    )
+  ).length;
+
+  const totalUnbilledFeeOwed = clientBillingSummary.reduce((sum, c) => sum + (c.unbilledFee || 0), 0);
 
   const handleAddClientSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -218,7 +270,8 @@ export const AdminClientManager: React.FC = () => {
       serviceAreas: serviceAreas.split(',').map((s) => s.trim()).filter(Boolean),
       agreementStatus: 'active',
       description: description.trim() || 'Verified client business on the affiliate platform.',
-      amountPaidRupees: 0
+      amountPaidRupees: 0,
+      commissionPercent: pct
     });
 
     // 2. Sync Provider & Agreement to Supabase live DB
@@ -321,235 +374,507 @@ export const AdminClientManager: React.FC = () => {
         </button>
       </div>
 
-      {/* Financial Health & Receivables Summary */}
-      <div className="metrics-grid">
-        <div className="metric-card" style={{ borderLeft: '4px solid var(--brand-navy)' }}>
-          <div className="metric-header">
-            <span>Client Businesses</span>
-            <Building2 size={16} color="var(--brand-navy)" />
-          </div>
-          <div className="metric-value num-tabular" style={{ color: 'var(--brand-navy)' }}>
-            {providers.length}
-          </div>
-          <div className="metric-subtext">
-            <span>Active client partners on our platform</span>
-          </div>
-        </div>
+      {/* Admin SubTab Switcher: Client Businesses vs Monthly Provider Invoices */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '2px solid var(--border-light)', paddingBottom: '2px' }}>
+        <button
+          type="button"
+          onClick={() => setAdminSubTab('clients')}
+          style={{
+            padding: '10px 18px',
+            fontSize: '0.90rem',
+            fontWeight: 800,
+            backgroundColor: 'transparent',
+            border: 'none',
+            borderBottom: adminSubTab === 'clients' ? '3px solid var(--brand-cobalt)' : '3px solid transparent',
+            color: adminSubTab === 'clients' ? 'var(--brand-cobalt)' : 'var(--text-muted)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '-2px'
+          }}
+        >
+          <Building2 size={16} />
+          <span>Client Businesses ({providers.length})</span>
+        </button>
 
-        <div className="metric-card" style={{ borderLeft: '4px solid var(--brand-cobalt)' }}>
-          <div className="metric-header">
-            <span>Total Referrals Delivered</span>
-            <Users size={16} color="var(--brand-cobalt)" />
-          </div>
-          <div className="metric-value num-tabular" style={{ color: 'var(--brand-cobalt)' }}>
-            {referrals.length}
-          </div>
-          <div className="metric-subtext">
-            <span>Customer introductions handed to clients</span>
-          </div>
-        </div>
-
-        <div className="metric-card" style={{ borderLeft: '4px solid var(--accent-coral)' }}>
-          <div className="metric-header">
-            <span>Total Fees Owed by Clients</span>
-            <TrendingUp size={16} color="var(--accent-coral)" />
-          </div>
-          <div className="metric-value num-tabular" style={{ color: 'var(--accent-coral)' }}>
-            ₹{totalOwedByAllClients.toLocaleString('en-IN')}
-          </div>
-          <div className="metric-subtext">
-            <span>What clients must pay us for delivered referrals</span>
-          </div>
-        </div>
-
-        <div className="metric-card" style={{ borderLeft: '4px solid var(--finance-green)' }}>
-          <div className="metric-header">
-            <span>Total Payments Collected</span>
-            <CheckCircle2 size={16} color="var(--finance-green)" />
-          </div>
-          <div className="metric-value num-tabular" style={{ color: 'var(--finance-green)' }}>
-            ₹{totalCollectedFromClients.toLocaleString('en-IN')}
-          </div>
-          <div className="metric-subtext">
-            <span>Received into company bank account</span>
-          </div>
-        </div>
-
-        <div className="metric-card" style={{ borderLeft: '4px solid var(--status-pending)' }}>
-          <div className="metric-header">
-            <span>Outstanding Balance Owed to Us</span>
-            <Clock size={16} color="var(--status-pending)" />
-          </div>
-          <div className="metric-value num-tabular" style={{ color: totalOutstandingBalance > 0 ? 'var(--status-pending)' : 'var(--finance-green)' }}>
-            ₹{totalOutstandingBalance.toLocaleString('en-IN')}
-          </div>
-          <div className="metric-subtext">
-            <span>Pending collection from client businesses</span>
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={() => setAdminSubTab('invoices')}
+          style={{
+            padding: '10px 18px',
+            fontSize: '0.90rem',
+            fontWeight: 800,
+            backgroundColor: 'transparent',
+            border: 'none',
+            borderBottom: adminSubTab === 'invoices' ? '3px solid var(--brand-cobalt)' : '3px solid transparent',
+            color: adminSubTab === 'invoices' ? 'var(--brand-cobalt)' : 'var(--text-muted)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '-2px'
+          }}
+        >
+          <FileText size={16} />
+          <span>Monthly Provider Statements ({providerMonthlyInvoices.length})</span>
+          {totalUnbilledConversions > 0 && (
+            <span style={{ fontSize: '0.72rem', backgroundColor: '#EFF6FF', color: '#1E40AF', padding: '1px 7px', borderRadius: '10px', fontWeight: 800 }}>
+              {totalUnbilledConversions} conversions ready to bill
+            </span>
+          )}
+        </button>
       </div>
 
-      {/* Client Businesses Table: Referrals Given & Amount Owed */}
-      <div style={{ marginBottom: '36px' }}>
-        <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--brand-navy)', marginBottom: '14px' }}>
-          Client Businesses & Referral Accounting
-        </h3>
+      {adminSubTab === 'clients' ? (
+        <div>
+          {/* Financial Health & Receivables Summary */}
+          <div className="metrics-grid">
+            <div className="metric-card" style={{ borderLeft: '4px solid var(--brand-navy)' }}>
+              <div className="metric-header">
+                <span>Client Businesses</span>
+                <Building2 size={16} color="var(--brand-navy)" />
+              </div>
+              <div className="metric-value num-tabular" style={{ color: 'var(--brand-navy)' }}>
+                {providers.length}
+              </div>
+              <div className="metric-subtext">
+                <span>Active client partners on our platform</span>
+              </div>
+            </div>
 
-        <div className="table-responsive">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Client Business / Location</th>
-                <th>Contact Person</th>
-                <th>Referrals Given</th>
-                <th>Amount Client Must Pay Us</th>
-                <th>Amount Client Paid</th>
-                <th>Balance Owed to Us</th>
-                <th>Billing Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {clientBillingSummary.map((item) => {
-                const { provider, referralsCount, qualifiedLeads, conversions, totalAccruedFee, amountPaid, balanceOwed } = item;
+            <div className="metric-card" style={{ borderLeft: '4px solid var(--brand-cobalt)' }}>
+              <div className="metric-header">
+                <span>Total Referrals Delivered</span>
+                <Users size={16} color="var(--brand-cobalt)" />
+              </div>
+              <div className="metric-value num-tabular" style={{ color: 'var(--brand-cobalt)' }}>
+                {referrals.length}
+              </div>
+              <div className="metric-subtext">
+                <span>Customer introductions handed to clients</span>
+              </div>
+            </div>
 
-                return (
-                  <tr key={provider.id}>
-                    <td>
-                      <strong style={{ fontSize: '0.95rem', color: 'var(--brand-navy)', display: 'block' }}>
-                        {provider.businessName}
-                      </strong>
-                      <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-                        📍 {provider.city} • {provider.tagline}
-                      </span>
-                    </td>
+            <div className="metric-card" style={{ borderLeft: '4px solid var(--accent-coral)' }}>
+              <div className="metric-header">
+                <span>Total Fees Owed by Clients</span>
+                <TrendingUp size={16} color="var(--accent-coral)" />
+              </div>
+              <div className="metric-value num-tabular" style={{ color: 'var(--accent-coral)' }}>
+                ₹{totalOwedByAllClients.toLocaleString('en-IN')}
+              </div>
+              <div className="metric-subtext">
+                <span>What clients must pay us for delivered referrals</span>
+              </div>
+            </div>
 
-                    <td>
-                      <strong style={{ fontSize: '0.86rem', display: 'block' }}>{provider.contactPerson}</strong>
-                      <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>{provider.phone}</span>
-                    </td>
+            <div className="metric-card" style={{ borderLeft: '4px solid var(--finance-green)' }}>
+              <div className="metric-header">
+                <span>Total Payments Collected</span>
+                <CheckCircle2 size={16} color="var(--finance-green)" />
+              </div>
+              <div className="metric-value num-tabular" style={{ color: 'var(--finance-green)' }}>
+                ₹{totalCollectedFromClients.toLocaleString('en-IN')}
+              </div>
+              <div className="metric-subtext">
+                <span>Received into company bank account</span>
+              </div>
+            </div>
 
-                    <td>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                        <span className="badge badge-neutral" style={{ width: 'fit-content', fontWeight: 700 }}>
-                          {referralsCount} Referrals Given
-                        </span>
-                        <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
-                          {qualifiedLeads} Qualified • {conversions} Converted
-                        </span>
-                      </div>
-                    </td>
+            <div className="metric-card" style={{ borderLeft: '4px solid var(--status-pending)' }}>
+              <div className="metric-header">
+                <span>Outstanding Balance Owed to Us</span>
+                <Clock size={16} color="var(--status-pending)" />
+              </div>
+              <div className="metric-value num-tabular" style={{ color: totalOutstandingBalance > 0 ? 'var(--status-pending)' : 'var(--finance-green)' }}>
+                ₹{totalOutstandingBalance.toLocaleString('en-IN')}
+              </div>
+              <div className="metric-subtext">
+                <span>Pending collection from client businesses</span>
+              </div>
+            </div>
+          </div>
 
-                    <td>
-                      <strong className="num-tabular" style={{ fontSize: '1.05rem', color: 'var(--brand-navy)' }}>
-                        ₹{totalAccruedFee.toLocaleString('en-IN')}
-                      </strong>
-                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>
-                        Earned on qualifying events
-                      </span>
-                    </td>
+          {/* Month-End Invoicing Engine Action Card */}
+          {totalUnbilledConversions > 0 && (
+            <div
+              style={{
+                padding: '16px 20px',
+                backgroundColor: '#EFF6FF',
+                borderRadius: '10px',
+                border: '1.5px solid #BFDBFE',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '14px',
+                marginBottom: '24px'
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: '#1E40AF', backgroundColor: '#DBEAFE', padding: '2px 8px', borderRadius: '4px' }}>
+                    Month-End Billing Engine
+                  </span>
+                  <strong style={{ fontSize: '1rem', color: 'var(--brand-navy)' }}>
+                    {totalUnbilledConversions} Converted Customers Ready for Invoicing
+                  </strong>
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#475569' }}>
+                  Across {providersWithUnbilledCount} provider businesses (Total Platform Fee: ₹{totalUnbilledFeeOwed.toLocaleString('en-IN')}). Click to generate monthly billing statements and dispatch them directly to provider portals.
+                </p>
+              </div>
 
-                    <td>
-                      <strong className="num-tabular" style={{ fontSize: '1.05rem', color: 'var(--finance-green)' }}>
-                        ₹{amountPaid.toLocaleString('en-IN')}
-                      </strong>
-                    </td>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  const res = generateAllMonthlyInvoices();
+                  if (res.count > 0) {
+                    showNotification(`Generated ${res.count} monthly invoices (Total: ₹${res.totalFee.toLocaleString('en-IN')}) and dispatched to provider portals!`, 'success');
+                  } else {
+                    showNotification('No unbilled customer conversions to invoice.', 'info');
+                  }
+                }}
+                style={{ fontWeight: 700, padding: '9px 18px', display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                <Sparkles size={15} />
+                <span>Generate Invoices for All Providers</span>
+              </button>
+            </div>
+          )}
 
-                    <td>
-                      {balanceOwed > 0 ? (
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <strong className="num-tabular" style={{ fontSize: '1.05rem', color: 'var(--accent-coral)' }}>
-                            ₹{balanceOwed.toLocaleString('en-IN')}
-                          </strong>
-                          <span style={{ fontSize: '0.72rem', color: 'var(--accent-coral)', fontWeight: 600 }}>
-                            PENDING FROM CLIENT
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="badge badge-success">
-                          ✓ ALL CLEARED
-                        </span>
-                      )}
-                    </td>
+          {/* Client Businesses Table: Referrals Given & Amount Owed */}
+          <div style={{ marginBottom: '36px' }}>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--brand-navy)', marginBottom: '14px' }}>
+              Client Businesses & Referral Accounting
+            </h3>
 
-                    <td>
-                      {balanceOwed > 0 ? (
-                        <span className="badge badge-pending">
-                          Payment Due
-                        </span>
-                      ) : (
-                        <span className="badge badge-success">
-                          Cleared / Up to Date
-                        </span>
-                      )}
-                    </td>
-
-                    <td>
-                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          style={{ padding: '4px 8px', fontSize: '0.74rem' }}
-                          onClick={() => setSelectedClient(provider)}
-                          title="Inspect all referrals given to this client"
-                        >
-                          <Eye size={13} />
-                          <span>View Referrals</span>
-                        </button>
-
-                        <button
-                          className="btn btn-primary btn-sm"
-                          style={{ padding: '4px 8px', fontSize: '0.74rem', backgroundColor: 'var(--finance-green)', borderColor: 'var(--finance-green)' }}
-                          onClick={() => {
-                            setPaymentClient(provider);
-                            setPaymentAmount(balanceOwed > 0 ? balanceOwed.toString() : '1000');
-                          }}
-                          title="Record payment received from client"
-                        >
-                          <CreditCard size={13} />
-                          <span>Record Payment</span>
-                        </button>
-
-                        <button
-                          className="btn btn-outline btn-sm"
-                          style={{ padding: '4px 8px', fontSize: '0.74rem', color: 'var(--brand-cobalt)', borderColor: '#BAE6FD' }}
-                          onClick={() => {
-                            const provUser = savedProviderUsers.find((u) => u.providerId === provider.id);
-
-                            setHandoverCard({
-                              businessName: provider.businessName,
-                              contactPerson: provider.contactPerson,
-                              email: provUser?.email || provider.email || '',
-                              password: 'Partner@2026',
-                              providerId: provider.id,
-                              phone: provider.phone
-                            });
-                          }}
-                          title="View and share login credentials for this provider"
-                        >
-                          <Key size={13} />
-                          <span>Share Credentials</span>
-                        </button>
-
-                        <button
-                          className="btn btn-outline btn-sm"
-                          style={{ padding: '4px 8px', fontSize: '0.74rem' }}
-                          onClick={() => {
-                            loginAsProvider(provider);
-                          }}
-                          title="Open this client's isolated provider portal"
-                        >
-                          <LogIn size={13} />
-                          <span>Login as Client</span>
-                        </button>
-                      </div>
-                    </td>
+            <div className="table-responsive">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Client Business / Location</th>
+                    <th>Contact Person</th>
+                    <th>Referrals Given</th>
+                    <th>Amount Client Must Pay Us</th>
+                    <th>Amount Client Paid</th>
+                    <th>Balance Owed to Us</th>
+                    <th>Billing Status</th>
+                    <th>Actions</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {clientBillingSummary.map((item) => {
+                    const { provider, referralsCount, qualifiedLeads, conversions, totalAccruedFee, amountPaid, balanceOwed, unbilledRefs, unbilledFee } = item;
+
+                    return (
+                      <tr key={provider.id}>
+                        <td>
+                          <strong style={{ fontSize: '0.95rem', color: 'var(--brand-navy)', display: 'block' }}>
+                            {provider.businessName}
+                          </strong>
+                          <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+                            📍 {provider.city} • {provider.tagline}
+                          </span>
+                        </td>
+
+                        <td>
+                          <strong style={{ fontSize: '0.86rem', display: 'block' }}>{provider.contactPerson}</strong>
+                          <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>{provider.phone}</span>
+                        </td>
+
+                        <td>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                            <span className="badge badge-neutral" style={{ width: 'fit-content', fontWeight: 700 }}>
+                              {referralsCount} Referrals Given
+                            </span>
+                            <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                              {qualifiedLeads} Qualified • {conversions} Converted
+                            </span>
+                          </div>
+                        </td>
+
+                        <td>
+                          <strong className="num-tabular" style={{ fontSize: '1.05rem', color: 'var(--brand-navy)' }}>
+                            ₹{totalAccruedFee.toLocaleString('en-IN')}
+                          </strong>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>
+                            Earned on qualifying events
+                          </span>
+                        </td>
+
+                        <td>
+                          <strong className="num-tabular" style={{ fontSize: '1.05rem', color: 'var(--finance-green)' }}>
+                            ₹{amountPaid.toLocaleString('en-IN')}
+                          </strong>
+                        </td>
+
+                        <td>
+                          {balanceOwed > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <strong className="num-tabular" style={{ fontSize: '1.05rem', color: 'var(--accent-coral)' }}>
+                                ₹{balanceOwed.toLocaleString('en-IN')}
+                              </strong>
+                              <span style={{ fontSize: '0.72rem', color: 'var(--accent-coral)', fontWeight: 600 }}>
+                                PENDING FROM CLIENT
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="badge badge-success">
+                              ✓ ALL CLEARED
+                            </span>
+                          )}
+                        </td>
+
+                        <td>
+                          {balanceOwed > 0 ? (
+                            <span className="badge badge-pending">
+                              Payment Due
+                            </span>
+                          ) : (
+                            <span className="badge badge-success">
+                              Cleared / Up to Date
+                            </span>
+                          )}
+                        </td>
+
+                        <td>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            {unbilledRefs.length > 0 && (
+                              <button
+                                type="button"
+                                className="btn btn-sm"
+                                style={{ padding: '4px 10px', fontSize: '0.74rem', backgroundColor: 'var(--brand-navy)', color: '#FFF', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                onClick={() => {
+                                  const inv = generateProviderMonthlyInvoice(provider.id);
+                                  if (inv) {
+                                    showNotification(`Generated Monthly Invoice ${inv.invoiceNumber} for ${provider.businessName} (₹${inv.totalFeeOwedToPlatform.toLocaleString('en-IN')})! Sent to provider portal.`, 'success');
+                                  }
+                                }}
+                                title={`Generate monthly consolidated statement for ${unbilledRefs.length} customer conversions`}
+                              >
+                                <FileText size={13} />
+                                <span>Issue Invoice (₹{unbilledFee.toLocaleString('en-IN')})</span>
+                              </button>
+                            )}
+
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              style={{ padding: '4px 8px', fontSize: '0.74rem' }}
+                              onClick={() => setSelectedClient(provider)}
+                              title="Inspect all referrals given to this client"
+                            >
+                              <Eye size={13} />
+                              <span>View Referrals</span>
+                            </button>
+
+                            <button
+                              className="btn btn-primary btn-sm"
+                              style={{ padding: '4px 8px', fontSize: '0.74rem', backgroundColor: 'var(--finance-green)', borderColor: 'var(--finance-green)' }}
+                              onClick={() => {
+                                setPaymentClient(provider);
+                                setPaymentAmount(balanceOwed > 0 ? balanceOwed.toString() : '1000');
+                              }}
+                              title="Record payment received from client"
+                            >
+                              <CreditCard size={13} />
+                              <span>Record Payment</span>
+                            </button>
+
+                            <button
+                              className="btn btn-outline btn-sm"
+                              style={{ padding: '4px 8px', fontSize: '0.74rem', color: 'var(--brand-cobalt)', borderColor: '#BAE6FD' }}
+                              onClick={() => {
+                                const provUser = savedProviderUsers.find((u) => u.providerId === provider.id);
+
+                                setHandoverCard({
+                                  businessName: provider.businessName,
+                                  contactPerson: provider.contactPerson,
+                                  email: provUser?.email || provider.email || '',
+                                  password: 'Partner@2026',
+                                  providerId: provider.id,
+                                  phone: provider.phone
+                                });
+                              }}
+                              title="View and share login credentials for this provider"
+                            >
+                              <Key size={13} />
+                              <span>Share Credentials</span>
+                            </button>
+
+                            <button
+                              className="btn btn-outline btn-sm"
+                              style={{ padding: '4px 8px', fontSize: '0.74rem' }}
+                              onClick={() => {
+                                loginAsProvider(provider);
+                              }}
+                              title="Open this client's isolated provider portal"
+                            >
+                              <LogIn size={13} />
+                              <span>Login as Client</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-      </div>
+      ) : (
+        /* TAB 2: Monthly Provider Statements */
+        <div style={{ marginBottom: '36px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px', marginBottom: '18px' }}>
+            <div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--brand-navy)', margin: 0 }}>
+                Monthly Consolidated Provider Invoices
+              </h3>
+              <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                Statements issued to provider businesses based on customer bill receipts. When providers clear their invoices, affiliate commissions unlock for disbursement.
+              </p>
+            </div>
+
+            {totalUnbilledConversions > 0 && (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  const res = generateAllMonthlyInvoices();
+                  if (res.count > 0) {
+                    showNotification(`Generated ${res.count} monthly invoices (Total: ₹${res.totalFee.toLocaleString('en-IN')}) and dispatched to provider portals!`, 'success');
+                  }
+                }}
+                style={{ fontWeight: 700, padding: '9px 18px', display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                <Sparkles size={15} />
+                <span>⚡ Generate All Current Month Invoices ({totalUnbilledConversions} Pending)</span>
+              </button>
+            )}
+          </div>
+
+          {providerMonthlyInvoices.length === 0 ? (
+            <div style={{ padding: '48px 20px', textAlign: 'center', backgroundColor: '#FFFFFF', borderRadius: '10px', border: '1px solid var(--border-light)' }}>
+              <FileText size={40} color="#94A3B8" style={{ margin: '0 auto 12px' }} />
+              <h4 style={{ fontSize: '1.05rem', color: 'var(--brand-navy)', marginBottom: '6px' }}>No Monthly Statements Generated Yet</h4>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', maxWidth: '480px', margin: '0 auto' }}>
+                When customer leads convert and have verified receipts, click the <strong>Generate Monthly Invoice</strong> button to issue statements to client businesses.
+              </p>
+            </div>
+          ) : (
+            <div className="table-responsive">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Invoice Ref / Month</th>
+                    <th>Client Business</th>
+                    <th>Customer Visits</th>
+                    <th>Total Customer Sales</th>
+                    <th>Platform Fee Owed</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {providerMonthlyInvoices.map((inv) => (
+                    <tr key={inv.id}>
+                      <td>
+                        <strong style={{ fontSize: '0.92rem', color: 'var(--brand-navy)', display: 'block' }}>
+                          {inv.invoiceNumber}
+                        </strong>
+                        <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                          {inv.billingMonth} • Issued: {new Date(inv.generatedAt).toLocaleDateString('en-IN')}
+                        </span>
+                      </td>
+
+                      <td>
+                        <strong style={{ fontSize: '0.90rem', color: 'var(--brand-navy)', display: 'block' }}>
+                          {inv.providerBusinessName}
+                        </strong>
+                        <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                          MoU Rate: {inv.mouCommissionPercent}%
+                        </span>
+                      </td>
+
+                      <td>
+                        <span className="badge badge-neutral" style={{ fontWeight: 700 }}>
+                          {inv.totalBilledCustomers} Customers
+                        </span>
+                      </td>
+
+                      <td>
+                        <strong className="num-tabular" style={{ fontSize: '1rem', color: 'var(--brand-navy)' }}>
+                          ₹{inv.totalPatientBilledAmount.toLocaleString('en-IN')}
+                        </strong>
+                      </td>
+
+                      <td>
+                        <strong className="num-tabular" style={{ fontSize: '1.05rem', color: inv.status === 'unpaid' ? 'var(--accent-coral)' : 'var(--finance-green)' }}>
+                          ₹{inv.totalFeeOwedToPlatform.toLocaleString('en-IN')}
+                        </strong>
+                        <span style={{ fontSize: '0.70rem', color: 'var(--text-muted)', display: 'block' }}>
+                          Affiliate Split (50%): ₹{inv.affiliateShareTotal.toLocaleString('en-IN')}
+                        </span>
+                      </td>
+
+                      <td>
+                        {inv.status === 'unpaid' ? (
+                          <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', backgroundColor: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA' }}>
+                            🔴 PAYMENT DUE
+                          </span>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: '0.72rem', fontWeight: 800, padding: '3px 8px', borderRadius: '6px', backgroundColor: '#DCFCE7', color: '#166534', border: '1px solid #86EFAC', width: 'fit-content' }}>
+                              ✓ CLEARED & PAID
+                            </span>
+                            <span style={{ fontSize: '0.68rem', color: '#15803D', marginTop: '2px' }}>
+                              Ref: {inv.paymentReference || 'UTR-CLEARED'}
+                            </span>
+                          </div>
+                        )}
+                      </td>
+
+                      <td>
+                        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            className="btn btn-secondary btn-sm"
+                            style={{ padding: '4px 8px', fontSize: '0.74rem' }}
+                            onClick={() => setViewInvoiceModal(inv)}
+                            title="View itemized customer bills, receipts, and split breakdown"
+                          >
+                            <Eye size={13} />
+                            <span>View Details</span>
+                          </button>
+
+                          {inv.status === 'unpaid' && (
+                            <button
+                              type="button"
+                              className="btn btn-sm"
+                              style={{ padding: '4px 8px', fontSize: '0.74rem', backgroundColor: 'var(--finance-green)', color: '#FFF', fontWeight: 700 }}
+                              onClick={() => {
+                                markProviderMonthlyInvoicePaid(inv.id, `UTR-ADMIN-${Date.now().toString().slice(-6)}`);
+                                showNotification(`Marked invoice ${inv.invoiceNumber} as Cleared! Affiliate rewards unlocked for bulk payout.`, 'success');
+                              }}
+                              title="Mark invoice cleared if provider paid directly to bank"
+                            >
+                              <CheckCircle2 size={13} />
+                              <span>Mark Paid (UTR)</span>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modal: Add New Client Business via Signed MoU */}
       {showAddClientModal && (
@@ -1325,6 +1650,91 @@ export const AdminClientManager: React.FC = () => {
                 onClick={() => setHandoverCard(null)}
               >
                 Close & Return to Client Manager
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: View Itemized Invoice Details & Customer Receipts */}
+      {viewInvoiceModal && (
+        <div className="modal-backdrop">
+          <div className="modal-content" style={{ maxWidth: '680px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-header">
+              <div>
+                <h3 className="modal-title" style={{ fontSize: '1.05rem', margin: 0 }}>
+                  Statement Details: {viewInvoiceModal.invoiceNumber}
+                </h3>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  {viewInvoiceModal.providerBusinessName} • Billing Month: {viewInvoiceModal.billingMonth} ({viewInvoiceModal.mouCommissionPercent}% MoU)
+                </span>
+              </div>
+              <button className="modal-close-btn" onClick={() => setViewInvoiceModal(null)}>✕</button>
+            </div>
+
+            <div className="modal-body" style={{ padding: '20px', overflowY: 'auto' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px', marginBottom: '20px' }}>
+                <div style={{ padding: '12px', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block' }}>Customer Sales</span>
+                  <strong style={{ fontSize: '1.15rem', color: 'var(--brand-navy)' }}>₹{viewInvoiceModal.totalPatientBilledAmount.toLocaleString('en-IN')}</strong>
+                </div>
+                <div style={{ padding: '12px', backgroundColor: '#EFF6FF', borderRadius: '8px', border: '1px solid #BFDBFE' }}>
+                  <span style={{ fontSize: '0.72rem', color: '#1E40AF', display: 'block' }}>Platform Fee Owed</span>
+                  <strong style={{ fontSize: '1.15rem', color: '#1E40AF' }}>₹{viewInvoiceModal.totalFeeOwedToPlatform.toLocaleString('en-IN')}</strong>
+                </div>
+                <div style={{ padding: '12px', backgroundColor: '#F0FDF4', borderRadius: '8px', border: '1px solid #BBF7D0' }}>
+                  <span style={{ fontSize: '0.72rem', color: '#15803D', display: 'block' }}>Affiliate Split (50%)</span>
+                  <strong style={{ fontSize: '1.15rem', color: '#15803D' }}>₹{viewInvoiceModal.affiliateShareTotal.toLocaleString('en-IN')}</strong>
+                </div>
+                <div style={{ padding: '12px', backgroundColor: '#FEF3C7', borderRadius: '8px', border: '1px solid #FDE68A' }}>
+                  <span style={{ fontSize: '0.72rem', color: '#92400E', display: 'block' }}>Company Margin</span>
+                  <strong style={{ fontSize: '1.15rem', color: '#92400E' }}>₹{viewInvoiceModal.platformRetainedTotal.toLocaleString('en-IN')}</strong>
+                </div>
+              </div>
+
+              <h4 style={{ fontSize: '0.90rem', fontWeight: 700, color: 'var(--brand-navy)', marginBottom: '10px' }}>
+                Itemized Customer Conversions & Uploaded Receipts
+              </h4>
+
+              <div className="table-responsive" style={{ border: '1px solid #E2E8F0', borderRadius: '8px' }}>
+                <table className="data-table" style={{ fontSize: '0.80rem', margin: 0 }}>
+                  <thead>
+                    <tr>
+                      <th>Customer Name</th>
+                      <th>Bill / Receipt Ref</th>
+                      <th>Bill Amount</th>
+                      <th>MoU Fee ({viewInvoiceModal.mouCommissionPercent}%)</th>
+                      <th>Affiliate Payout (50%)</th>
+                      <th>Receipt Photo</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viewInvoiceModal.items.map((item) => (
+                      <tr key={item.referralId}>
+                        <td><strong>{item.customerName}</strong></td>
+                        <td><code>{item.invoiceRef || item.referralCode}</code></td>
+                        <td>₹{item.billedAmount.toLocaleString('en-IN')}</td>
+                        <td style={{ fontWeight: 700, color: 'var(--brand-navy)' }}>₹{item.providerFee.toLocaleString('en-IN')}</td>
+                        <td style={{ fontWeight: 700, color: 'var(--finance-green)' }}>₹{item.affiliateShare.toLocaleString('en-IN')}</td>
+                        <td>
+                          {item.billProofUrl ? (
+                            <a href={item.billProofUrl} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--brand-cobalt)', fontWeight: 600, textDecoration: 'underline' }}>
+                              View Photo
+                            </a>
+                          ) : (
+                            <span style={{ color: '#94A3B8' }}>None</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', padding: '12px 20px', borderTop: '1px solid var(--border-light)' }}>
+              <button type="button" className="btn btn-secondary" onClick={() => setViewInvoiceModal(null)}>
+                Close
               </button>
             </div>
           </div>
